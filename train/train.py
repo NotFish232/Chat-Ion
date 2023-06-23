@@ -1,6 +1,6 @@
-from models.network import Network
-from utils.checkpointer import CheckPointer
-from utils.dataset import CornellMovieDataset
+from models import Network
+from utils.model_loader import ModelLoader
+from utils.datasets import CornellMovieDataset
 from train.arg_parser import get_args
 
 import torch as T
@@ -23,15 +23,17 @@ def training_loop(args: Namespace) -> None:
     network = Network(dataset.num_words, args.embed_dim).to(device)
     print(f"Parameters: {sum(i.numel() for i in network.parameters()):,}")
 
-    optimizer = optim.Adam(network.parameters(), args.learning_rate)
+    optimizer = optim.Adam(
+        network.parameters(), args.learning_rate, weight_decay=args.weight_decay
+    )
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer)
     criterion = nn.CrossEntropyLoss(ignore_index=dataset.PAD_IDX)
 
-    checkpointer = CheckPointer()
+    model_loader = ModelLoader()
 
-    if checkpointer.checkpoint_exists():
+    if model_loader.checkpoint_exists():
         print("Checkpoint exists, loading save!")
-        x = checkpointer.load_checkpoint()
+        x = model_loader.load_checkpoint()
         network.load_state_dict(x["network"])
         optimizer.load_state_dict(x["optimizer"])
         scheduler.load_state_dict(x["scheduler"])
@@ -90,13 +92,11 @@ def training_loop(args: Namespace) -> None:
         accuracy = num_correct / num_total
         print(f"Accuracy: {accuracy:.2%}, loss: {avg_loss:.2f}")
 
-    if accuracy > starting_accuracy:
-        print(f"Accuracy improved! ({accuracy:.2%} vs {starting_accuracy:.2%})")
-        print("Saving checkpoint...")
-        checkpointer.save(network, optimizer, scheduler, epoch, accuracy)
-    else:
-        print(f"Accuracy decreased. ({accuracy:.2%} vs {starting_accuracy:.2%})")
-        print("Not saving checkpoint.")
+        if epoch % args.checkpoint == 0:
+            print("Saving checkpoint...")
+            model_loader.save_checkpoint(network, optimizer, scheduler, epoch, accuracy)
+
+    model_loader.save_model(network)
 
 
 def main() -> None:

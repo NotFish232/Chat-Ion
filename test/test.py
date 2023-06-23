@@ -1,7 +1,7 @@
 import torch as T
-from models.network import Network
+from models import Network
 from utils.dataset import CornellMovieDataset
-from utils.checkpointer import CheckPointer
+from utils.model_loader import ModelLoader
 import warnings
 
 EMBED_DIM = 512
@@ -15,9 +15,9 @@ def main():
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)
 
-    checkpointer = CheckPointer()
+    model_loader = ModelLoader()
 
-    network.load_state_dict(checkpointer.load_model())
+    network.load_state_dict(model_loader.load_model())
 
     look_ahead_mask = T.triu(
         T.ones(

@@ -45,7 +45,7 @@ class Network(nn.Module):
             num_encoder_layers=4,
             num_decoder_layers=4,
             dim_feedforward=2048,
-            activation=F.leaky_relu,
+            activation=F.gelu,
             dropout=0.2,
             batch_first=True,
         )

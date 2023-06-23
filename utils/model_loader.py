@@ -7,20 +7,20 @@ from pathlib import Path
 BASE_DIR = Path(__file__).parents[1]
 
 
-class CheckPointer:
+class ModelLoader:
     def __init__(
         self: Self,
         checkpoint_dir: str = "./checkpoints",
         model_dir: str = "./trained_models",
-        preserve_old: bool = False,
+        preserve_old: bool = True,
     ) -> None:
         self.checkpoint_dir = BASE_DIR / checkpoint_dir
         self.model_dir = BASE_DIR / model_dir
         self.preserve_old = preserve_old
 
     @staticmethod
-    def extract_accuracy(model_name: str) -> float:
-        return float(model_name[-8:-3])
+    def extract_accuracy(model: Path) -> float:
+        return float(model.stem.split("-")[-1])
 
     def checkpoint_exists(self: Self) -> bool:
         return len(list(self.checkpoint_dir.glob("*.pt"))) != 0
@@ -39,11 +39,11 @@ class CheckPointer:
         models = list(self.checkpoint_dir.glob("*.pt"))
 
         # find model with highest accuracy
-        highest_acc_model = max(models, key=lambda x: self.extract_accuracy(str(x)))
+        highest_acc_model = max(models, key=self.extract_accuracy)
 
         return T.load(self.checkpoint_dir / highest_acc_model)
 
-    def save(
+    def save_checkpoint(
         self: Self,
         network: nn.Module,
         optimizer: optim.Optimizer,
@@ -66,4 +66,5 @@ class CheckPointer:
             f"{self.checkpoint_dir}/checkpoint-{epochs}-{100 * accuracy:05.2f}.pt",
         )
 
+    def save_model(self: Self, network: nn.Module) -> None:
         T.save(network.state_dict(), f"{self.model_dir}/model.pt")
