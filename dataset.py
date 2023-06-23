@@ -31,41 +31,30 @@ class ConversationDataset(Dataset):
         self.vocab, self.rvocab = self._build_vocab()
         self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"]
         self.PAD_IDX = self.vocab["<pad>"]
-
-        self.tokenized_conversations = self._tokenize_conversations()
     
     @property
-    def num_words(self: Self) -> int:
+    def num_words(self: Self):
         return len(self.vocab)
 
     def __len__(self: Self) -> int:
         return len(self.conversations)
 
     def __getitem__(self: Self, idx: int) -> tuple:
-        question, answer = self.tokenized_conversations[idx]
+        question, answer = self.conversations[idx]
+        question_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in question]
+        answer_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in answer]
+
+        question_padding = self.max_sentence_length - len(question_idxs)
+        answer_padding = self.max_sentence_length - len(answer_idxs)
+        question_idxs.extend(self.PAD_IDX for _ in range(question_padding))
+        answer_idxs.extend(self.PAD_IDX for _ in range(answer_padding))
 
         if self.transforms is not None:
-            question = self.transforms(question)
+            question_idxs = self.transforms(question_idxs)
         if self.target_transforms is not None:
-            answer = self.target_transforms(answer)
+            answer_idxs = self.target_transforms(answer_idxs)
 
-        return question, answer
-
-    def _tokenize_conversations(self: Self) -> list[tuple[list[int]]]:
-        tokenized_conversations = []
-        for question, answer in self.conversations:
-            question_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in question]
-            answer_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in answer]
-
-            question_padding = self.max_sentence_length - len(question_idxs)
-            answer_padding = self.max_sentence_length - len(answer_idxs)
-            question_idxs.extend(self.PAD_IDX for _ in range(question_padding))
-            answer_idxs.extend(self.PAD_IDX for _ in range(answer_padding))
-
-            tokenized_conversations.append((question_idxs, answer_idxs))
-        
-        return tokenized_conversations
-
+        return question_idxs, answer_idxs
 
     def _vocab_generator(self: Self) -> Iterator[str]:
         for conv in self.conversations:
