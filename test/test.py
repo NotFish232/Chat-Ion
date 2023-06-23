@@ -19,16 +19,7 @@ def main():
 
     network.load_state_dict(checkpointer.load_model())
 
-    src_look_ahead_mask = T.triu(
-        T.ones(
-            dataset.max_sentence_length,
-            dataset.max_sentence_length,
-            dtype=T.bool,
-            device=device,
-        ),
-        diagonal=1,
-    )
-    tgt_look_ahead_mask = T.triu(
+    look_ahead_mask = T.triu(
         T.ones(
             dataset.max_sentence_length + 1,
             dataset.max_sentence_length + 1,
@@ -53,8 +44,7 @@ def main():
 
             for t in range(1, len(tgt)):
                 masks = {
-                    "src_mask": src_look_ahead_mask,
-                    "tgt_mask": tgt_look_ahead_mask,
+                    "tgt_mask": look_ahead_mask,
                     "src_key_padding_mask": sentence == dataset.PAD_IDX,
                     "tgt_key_padding_mask": tgt == dataset.PAD_IDX,
                 }

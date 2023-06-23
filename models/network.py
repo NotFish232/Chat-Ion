@@ -42,8 +42,8 @@ class Network(nn.Module):
         self.transformer = nn.Transformer(
             embed_dim,
             nhead=8,
-            num_encoder_layers=8,
-            num_decoder_layers=8,
+            num_encoder_layers=4,
+            num_decoder_layers=4,
             dim_feedforward=2048,
             activation=F.leaky_relu,
             dropout=0.2,
