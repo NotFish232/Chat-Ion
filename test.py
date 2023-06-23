@@ -23,7 +23,7 @@ def main():
                 network(sentence, T.zeros(dataset.max_sentence_length, device=device, dtype=T.int32)),
                 dim=1,
             )
-        response = "".join(map(lambda x: dataset.rvocab[x], y[0]))
+        response = "".join(map(lambda x: dataset.rvocab[x.item()], y[0]))
         print(response)
 
 
