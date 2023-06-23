@@ -4,7 +4,7 @@ from utils.dataset import ConversationDataset
 from utils.checkpointer import CheckPointer
 import warnings
 
-EMBED_DIM = 256
+EMBED_DIM = 512
 
 
 def main():

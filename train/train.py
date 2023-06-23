@@ -10,9 +10,9 @@ from torchvision.transforms import Lambda
 from tqdm import tqdm
 
 BATCH_SIZE = 256
-NUM_EPOCHS = 75
-EMBED_DIM = 256
-LEARNING_RATE = 2e-5
+NUM_EPOCHS = 150
+EMBED_DIM = 512
+LEARNING_RATE = 1e-5
 
 
 def main() -> None:
