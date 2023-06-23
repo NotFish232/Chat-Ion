@@ -134,6 +134,8 @@ def training_loop(
 
     model_loader.save_model(network)
 
+    dist.destroy_process_group()
+
 
 def _training_helper(rank: int, world_size: int, kwargs: dict) -> None:
     training_loop(rank, world_size, **kwargs)
@@ -152,7 +154,6 @@ def main() -> None:
         nprocs=world_size,
         join=True,
     )
-    dist.destroy_process_group()
 
 
 if __name__ == "__main__":
