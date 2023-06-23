@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Lambda
 from tqdm import tqdm
 
-BATCH_SIZE = 32
+BATCH_SIZE = 256
 NUM_EPOCHS = 1
 EMBED_DIM = 256
 LEARNING_RATE = 1e-3
