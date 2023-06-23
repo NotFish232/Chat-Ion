@@ -2,6 +2,7 @@ from pathlib import Path
 
 import torch as T
 from torch import nn, optim
+from torch.cuda import amp
 from torch.optim import lr_scheduler
 from typing_extensions import Self
 
@@ -49,6 +50,7 @@ class ModelLoader:
         network: nn.Module,
         optimizer: optim.Optimizer,
         scheduler: lr_scheduler.LRScheduler,
+        scaler: amp.GradScaler,
         epochs: int,
         accuracy: float,
     ) -> None:
@@ -61,6 +63,7 @@ class ModelLoader:
                 "network": network.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "scheduler": scheduler.state_dict(),
+                "scaler": scaler.state_dict(),
                 "epochs": epochs,
                 "accuracy": accuracy,
             },

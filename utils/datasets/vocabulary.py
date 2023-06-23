@@ -1,12 +1,9 @@
 import json
 import string
-from pathlib import Path
-
 from nltk import corpus
 from transformers import BertTokenizer
 from typing_extensions import Self
-
-from . import DATA_DIR
+from .shared import DATA_DIR
 
 SPECIAL_TOKENS = ["<sos>", "<eos>", "<mask>", "<oov>", "<pad>", "<cls>", "<sep>"]
 
@@ -58,13 +55,14 @@ class Vocabulary:
             self.instance = super(Vocabulary, self).__new__(self)
         return self.instance
 
-    def tokenize_sentence(
-        self: Self, sentence: str, to_idxs: bool = True
-    ) -> list[str | int]:
+    def tokenize(self: Self, sentence: str, to_idxs: bool = True) -> list[str | int]:
         tokens = self.tokenizer.tokenize(sentence)
         if to_idxs:
             tokens = [self.token_to_idx.get(t, self.OOV_IDX) for t in tokens]
         return tokens
+    
+    def __len__(self: Self) -> int:
+        return len(self.token_to_idx)
 
     def __getitem__(self: Self, word_or_idx: str | int) -> int | str:
         assert isinstance(

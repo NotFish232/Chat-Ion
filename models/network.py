@@ -33,21 +33,31 @@ class PositionalEncoding(nn.Module):
 
 
 class Network(nn.Module):
-    def __init__(self: Self, num_embed: int, embed_dim: int) -> None:
+    def __init__(
+        self: Self,
+        num_embed: int,
+        embed_dim: int,
+        max_seq_len: int,
+        num_heads: int,
+        num_enc_layers: int,
+        num_dec_layers: int,
+        feed_forward_dim: int,
+        dropout: float,
+    ) -> None:
         super().__init__()
 
         self.embed_dim_sqrt = math.sqrt(embed_dim)
 
         self.embedding = nn.Embedding(num_embed, embed_dim)
-        self.positional_encoding = PositionalEncoding(16, embed_dim)
+        self.positional_encoding = PositionalEncoding(max_seq_len, embed_dim)
         self.transformer = nn.Transformer(
-            embed_dim,
-            nhead=8,
-            num_encoder_layers=4,
-            num_decoder_layers=4,
-            dim_feedforward=2048,
+            d_model=embed_dim,
+            nhead=num_heads,
+            num_encoder_layers=num_enc_layers,
+            num_decoder_layers=num_dec_layers,
+            dim_feedforward=feed_forward_dim,
+            dropout=dropout,
             activation=F.gelu,
-            dropout=0.2,
             batch_first=True,
         )
         self.linear = nn.Linear(embed_dim, num_embed)
