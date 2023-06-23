@@ -14,6 +14,7 @@ class CornellMovieDataset(Dataset):
         folder_name: str = "cornell",
         unprocessed_file_name: str = "raw.json",
         processed_file_name: str = "processed.json",
+        max_context_length: int = 256,
         max_sentence_length: int = 64,
         transforms: Callable = None,
         target_transforms: Callable = None,
@@ -22,6 +23,7 @@ class CornellMovieDataset(Dataset):
         self.unprocessed_file_name = unprocessed_file_name
         self.processed_file_name = processed_file_name
 
+        self.max_context_length = max_context_length
         self.max_sentence_length = max_sentence_length
 
         self.transforms = transforms
@@ -35,11 +37,10 @@ class CornellMovieDataset(Dataset):
         else:
             self.conversations = self._load_data()
 
-    def _pad_sentence(self: Self, words: list[str]) -> list[int]:
+    def _pad_sentence(self: Self, words: list[str], n: int) -> list[int]:
         words = words[: self.max_sentence_length]
 
-        padding = self.max_sentence_length - len(words)
-        words.extend(self.vocab.PAD_IDX for _ in range(padding))
+        words.extend(self.vocab.PAD_IDX for _ in range(n - len(words)))
 
         return words
 
@@ -63,12 +64,14 @@ class CornellMovieDataset(Dataset):
                     for q in sentences[:sentence_idx]
                 ),
                 [],
-            )[:-1]
+            )[:-1],
+            self.max_context_length,
         )
         answer = self._pad_sentence(
             [self.vocab.SOS_IDX]
             + self.vocab.tokenize(sentences[sentence_idx])
-            + [self.vocab.EOS_IDX]
+            + [self.vocab.EOS_IDX],
+            self.max_sentence_length,
         )
 
         if self.transforms is not None:
