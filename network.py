@@ -49,7 +49,11 @@ class Network(nn.Module):
         src = self.positional_encoding(src)
         tgt = self.positional_encoding(tgt)
 
-        x = self.transformer(src, tgt)
+        memory_mask = T.triu(
+            T.ones(tgt.size(-1), src.size(-1), dtype=T.bool), diagonal=1
+        )
+
+        x = self.transformer(src, tgt, memory_mask=memory_mask)
 
         x = self.linear(x)
 
@@ -66,7 +70,7 @@ def main() -> None:
     x = T.randint(0, 5, (1, 10))
     y = T.randint(0, 5, (1, 10))
     with T.no_grad():
-        print(x, y, T.argmax(n(x, y), dim=1), sep = '\n')
+        print(x, y, T.argmax(n(x, y), dim=1), sep="\n")
 
 
 if __name__ == "__main__":

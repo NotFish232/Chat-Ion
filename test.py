@@ -18,7 +18,7 @@ def main():
         user_input = input(">> ")
         words = user_input.split(" ")
         sentence = T.tensor(dataset.tokenize_sentence(words), device=device)
-        tgt = T.zeros(dataset.max_sentence_length, device=device, dtype=T.int32)
+        tgt = T.zeros((1, dataset.max_sentence_length), device=device, dtype=T.int32)
         tgt[0] = 1
         with T.no_grad():
             for t in range(1, len(tgt)):
