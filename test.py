@@ -22,6 +22,7 @@ def main():
         transforms=transforms, target_transforms=target_transforms
     )
     network = Network(dataset.num_words, EMBED_DIM).to(device)
+    network.load_state_dict(T.load("trained_model.pt"))
 
     user_input = ""
     network.eval()
