@@ -1,18 +1,21 @@
-import torch as T
 import logging
-from torch import amp, nn, optim, distributed as dist
+from typing import Callable
+
+import torch as T
+import torch.multiprocessing as mp
+from torch import amp
+from torch import distributed as dist
+from torch import nn, optim
 from torch.cuda.amp import GradScaler
+from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
-from typing import Callable
 from torchvision.transforms import Lambda
-import torch.multiprocessing as mp
 
 from models import Network
 from train.arg_parser import get_args
-from utils import make_look_ahead_mask, tqdm, ModelLoader
+from utils import ModelLoader, make_look_ahead_mask, tqdm
 from utils.datasets import CornellMovieDataset, Vocabulary
 
 
@@ -70,7 +73,6 @@ def prepare_network(
         setup_distributed(rank, world_size)
         network = DDP(network, device_ids=[rank])
     return network
-
 
 
 def prepare_logger(rank: int, world_size: int) -> logging.Logger:
@@ -160,6 +162,7 @@ def training_loop(
                 "src_key_padding_mask": prompts == vocab.PAD_IDX,
                 "tgt_key_padding_mask": labels_input == vocab.PAD_IDX,
             }
+            print([m.dtype for m in masks.values()])
 
             with amp.autocast(device.type):
                 y = network(prompts, labels_input, **masks)

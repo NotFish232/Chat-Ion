@@ -316,7 +316,9 @@ class OpenWebTextDataset(Dataset):
 
         for n in tqdm(range(self.num_processed_files), desc="writing processed..."):
             with (
-                open(self.data_dir /self.processed_folder_name / f"{n}.zst", "wb+") as f,
+                open(
+                    self.data_dir / self.processed_folder_name / f"{n}.zst", "wb+"
+                ) as f,
                 compressor.stream_writer(f) as compressed_writer,
             ):
                 num_passages = 0

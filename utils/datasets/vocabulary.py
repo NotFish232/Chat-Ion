@@ -72,7 +72,7 @@ class Vocabulary:
         if not hasattr(self, "instance"):
             self.instance = super(Vocabulary, self).__new__(self)
         return self.instance
-    
+
     def tokenize(self: Self, sentence: str, to_idxs: bool = True) -> list[str | int]:
         tokens = self.tokenizer.tokenize(sentence)
         if to_idxs:
