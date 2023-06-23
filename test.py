@@ -18,12 +18,13 @@ def main():
         user_input = input(">> ")
         words = user_input.split(" ")
         sentence = T.tensor(dataset.tokenize_sentence(words), device=device)
+        tgt = T.zeros(dataset.max_sentence_length, device=device, dtype=T.int32)
+        tgt[0] = 1
         with T.no_grad():
-            y = T.argmax(
-                network(sentence, T.zeros(dataset.max_sentence_length, device=device, dtype=T.int32)),
-                dim=-1,
-            )
-        response = " ".join(map(lambda x: dataset.rvocab[x.item()], y[0]))
+            for t in range(1, len(tgt)):
+                y = T.argmax(network(sentence), dim=-1)[0]
+                tgt[t] = y[t - 1]
+        response = " ".join(map(lambda x: dataset.rvocab[x.item()], tgt))
         print(response)
 
 

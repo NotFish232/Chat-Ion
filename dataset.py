@@ -31,7 +31,7 @@ class ConversationDataset(Dataset):
         self.vocab, self.rvocab = self._build_vocab()
         self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"]
         self.PAD_IDX = self.vocab["<pad>"]
-    
+
     @property
     def num_words(self: Self):
         return len(self.vocab)
@@ -59,7 +59,7 @@ class ConversationDataset(Dataset):
         return question_idxs, answer_idxs
 
     def _vocab_generator(self: Self) -> Iterator[str]:
-        special_tokens = ["<pad>", "<oov>", "<mask>"]
+        special_tokens = ["<pad>", "<sos>", "<oov>", "<mask>"]
         for token in special_tokens:
             yield token
         for conv in self.conversations:
