@@ -1,5 +1,6 @@
 import torch as T
 from torch import nn, optim
+from torch.optim import lr_scheduler
 from typing_extensions import Self
 from pathlib import Path
 
@@ -35,6 +36,7 @@ class CheckPointer:
         self: Self,
         network: nn.Module,
         optimizer: optim.Optimizer,
+        scheduler: lr_scheduler.LRScheduler,
         epochs: int,
         accuracy: float,
     ) -> None:
@@ -46,6 +48,7 @@ class CheckPointer:
             {
                 "network": network.state_dict(),
                 "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
                 "epochs": epochs,
                 "accuracy": accuracy,
             },

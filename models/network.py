@@ -41,9 +41,12 @@ class Network(nn.Module):
         self.positional_encoding = PositionalEncoding(num_embed, embed_dim)
         self.transformer = nn.Transformer(
             embed_dim,
-            num_encoder_layers=4,
-            num_decoder_layers=4,
+            nhead=4,
+            num_encoder_layers=16,
+            num_decoder_layers=16,
+            dim_feedforward=2048,
             activation=F.leaky_relu,
+            dropout=0.25,
             batch_first=True,
         )
         self.linear = nn.Linear(embed_dim, num_embed)

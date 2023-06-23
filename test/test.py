@@ -1,8 +1,9 @@
 import torch as T
 from models.network import Network
-from dataset import ConversationDataset
+from utils.dataset import ConversationDataset
+from utils.checkpointer import CheckPointer
 
-EMBED_DIM = 512
+EMBED_DIM = 256
 
 
 def main():
@@ -10,7 +11,11 @@ def main():
     dataset = ConversationDataset()
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)
-    network.load_state_dict(T.load("../models/trained_model.pt"))
+
+    checkpointer = CheckPointer()
+    x = checkpointer.load()
+
+    network.load_state_dict(x["network"])
 
     look_ahead_mask = T.triu(
         T.ones(
