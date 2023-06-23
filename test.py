@@ -21,11 +21,10 @@ def main():
         with T.no_grad():
             y = T.argmax(
                 network(sentence, T.zeros(dataset.max_sentence_length, device=device, dtype=T.int32)),
-                dim=1,
+                dim=-1,
             )
-        print(y.shape)
         response = "".join(map(lambda x: dataset.rvocab[x.item()], y[0]))
-        #print(response)
+        print(response)
 
 
 if __name__ == "__main__":
