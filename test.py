@@ -1,6 +1,7 @@
 import torch as T
 from network import Network
 from dataset import ConversationDataset
+
 EMBED_DIM = 256
 
 

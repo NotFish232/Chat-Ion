@@ -36,8 +36,9 @@ class ConversationDataset(Dataset):
         )
 
         self.vocab, self.rvocab, self.vocab_count = self._build_vocab()
-        self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"] # 0
-        self.PAD_IDX = self.vocab["<pad>"] # 1
+        self.PAD_IDX = self.vocab["<pad>"]  # 0
+        self.SOS_IDX = self.vocab["<sos>"]  # 1
+        self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"]  # 2
 
         if should_process_data:
             self._filter_conversations_by_vocab()
@@ -47,10 +48,15 @@ class ConversationDataset(Dataset):
     def num_words(self: Self):
         return len(self.vocab)
 
-    def tokenize_sentence(self: Self, words: list[str]) -> list[int]:
+    def tokenize_sentence(
+        self: Self, words: list[str], add_sos: bool = True
+    ) -> list[int]:
         word_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in words]
         padding = self.max_sentence_length - len(word_idxs)
         word_idxs.extend(self.PAD_IDX for _ in range(padding))
+
+        if add_sos:
+            word_idxs.insert(0, self.SOS_IDX)
 
         return word_idxs
 
@@ -59,8 +65,8 @@ class ConversationDataset(Dataset):
 
     def __getitem__(self: Self, idx: int) -> tuple:
         question, answer = self.conversations[idx]
-        question_idxs = self.tokenize_sentence(question)
-        answer_idxs = self.tokenize_sentence(answer)
+        question_idxs = self.tokenize_sentence(question, False)
+        answer_idxs = self.tokenize_sentence(answer, True)
 
         if self.transforms is not None:
             question_idxs = self.transforms(question_idxs)

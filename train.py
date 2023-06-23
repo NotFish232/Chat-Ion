@@ -7,7 +7,7 @@ from torchvision.transforms import Compose, Lambda
 from tqdm import tqdm
 
 BATCH_SIZE = 256
-NUM_EPOCHS = 10
+NUM_EPOCHS = 20
 EMBED_DIM = 256
 LEARNING_RATE = 1e-3
 
@@ -38,15 +38,20 @@ def main() -> None:
     eye = T.eye(dataset.num_words, device=device)
 
     memory_mask = T.triu(
-        T.ones(15, 15, dtype=T.bool, device=device),
+        T.ones(
+            dataset.max_sentence_length,
+            dataset.max_sentence_length,
+            dtype=T.bool,
+            device=device,
+        ),
         diagonal=1,
     )
 
     for epoch in range(1, NUM_EPOCHS + 1):
         acc_loss = 0
         for prompt, labels in tqdm(dataloader, desc=f"Epoch {epoch}"):
-            y = network(prompt, labels, memory_mask)
-            loss = criterion(y, eye[labels])
+            y = network(prompt, labels[:, :-1], memory_mask)
+            loss = criterion(y, eye[labels[:, 1:]])
             acc_loss += loss.detach()
             loss.backward()
             optimizer.step()
