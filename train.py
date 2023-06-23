@@ -36,11 +36,16 @@ def main() -> None:
     criterion = nn.CrossEntropyLoss()
 
     eye = T.eye(dataset.num_words, device=device)
-    
+
+    memory_mask = T.triu(
+        T.ones(15, 15, dtype=T.bool, device=device),
+        diagonal=1,
+    )
+
     for epoch in range(1, NUM_EPOCHS + 1):
         acc_loss = 0
         for prompt, labels in tqdm(dataloader, desc=f"Epoch {epoch}"):
-            y = network(prompt, labels)
+            y = network(prompt, labels, memory_mask)
             loss = criterion(y, eye[labels])
             acc_loss += loss.detach()
             loss.backward()

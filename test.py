@@ -1,8 +1,6 @@
 import torch as T
 from network import Network
 from dataset import ConversationDataset
-from torchvision.transforms import Compose, Lambda
-
 EMBED_DIM = 256
 
 

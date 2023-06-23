@@ -42,19 +42,14 @@ class Network(nn.Module):
         self.transformer = nn.Transformer(embed_dim, batch_first=True)
         self.linear = nn.Linear(embed_dim, num_embed)
 
-    def forward(self: Self, src: T.Tensor, tgt: T.Tensor) -> T.Tensor:
+    def forward(self: Self, src: T.Tensor, tgt: T.Tensor, mask: T.Tensor = None) -> T.Tensor:
         src = self.embedding(src) * self.embed_dim_sqrt
         tgt = self.embedding(tgt) * self.embed_dim_sqrt
 
         src = self.positional_encoding(src)
         tgt = self.positional_encoding(tgt)
 
-        memory_mask = T.triu(
-            T.ones(tgt.size(1), src.size(1), dtype=T.bool, device=src.device),
-            diagonal=1,
-        )
-
-        x = self.transformer(src, tgt, memory_mask=memory_mask)
+        x = self.transformer(src, tgt, memory_mask=mask)
 
         x = self.linear(x)
 
