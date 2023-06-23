@@ -46,7 +46,8 @@ class OpenWebTextDataset(Dataset):
         mode: Modes | str,
         folder_name: str = "openwebtext2",
         unprocessed_file_dir: str = "unprocessed",
-        processed_file_name: str = "processed.zst",
+        processed_folder_name: str = "processed",
+        num_processed_files: int = 6,
         info_file_name: str = "info.json",
         max_sentence_length: int = 64,
         max_passage_length: int = 256,
@@ -63,7 +64,8 @@ class OpenWebTextDataset(Dataset):
 
         self.data_dir = DATA_DIR / folder_name
         self.unprocessed_file_dir = unprocessed_file_dir
-        self.processed_file_name = processed_file_name
+        self.processed_folder_name = processed_folder_name
+        self.num_processed_files = num_processed_files
         self.info_file_name = info_file_name
 
         self.max_sentence_length = max_sentence_length
@@ -76,7 +78,7 @@ class OpenWebTextDataset(Dataset):
 
         self.files = list((self.data_dir / unprocessed_file_dir).glob("*.jsonl.zst"))
 
-        if not (self.data_dir / processed_file_name).exists():
+        if not (self.data_dir / self.info_file_name).exists():
             self._process_data()
 
         self.num_passages, self.num_sentences = self._read_info_file()
@@ -132,7 +134,7 @@ class OpenWebTextDataset(Dataset):
             if self.mode == Modes.PassToPass
             else self._make_masking_task()
             if self.mode == Modes.Masking
-            else None, None
+            else (None, None)
         )
 
         self.current_idx += 1
@@ -158,7 +160,9 @@ class OpenWebTextDataset(Dataset):
         target = self.vocab.tokenize(target)
 
         input = self._pad_tokens(input, self.max_sentence_length, True)
-        target = self._pad_tokens(target, self.max_sentence_length)
+        target = self._pad_tokens(
+            target, self.max_sentence_length, add_sos_and_eos=True
+        )
 
         return input, target
 
@@ -176,7 +180,7 @@ class OpenWebTextDataset(Dataset):
         target = self.vocab.tokenize(target)
 
         input = self._pad_tokens(input, self.max_sentence_length, True)
-        target = self._pad_tokens(target, self.max_passage_length)
+        target = self._pad_tokens(target, self.max_passage_length, add_sos_and_eos=True)
 
         return input, target
 
@@ -196,7 +200,9 @@ class OpenWebTextDataset(Dataset):
         target = self.vocab.tokenize(target)
 
         input = self._pad_tokens(input, self.max_passage_length, True)
-        target = self._pad_tokens(target, self.max_sentence_length)
+        target = self._pad_tokens(
+            target, self.max_sentence_length, add_sos_and_eos=True
+        )
 
         return input, target
 
@@ -218,7 +224,7 @@ class OpenWebTextDataset(Dataset):
         target = self.vocab.tokenize(target)
 
         input = self._pad_tokens(input, self.max_passage_length, True)
-        target = self._pad_tokens(target, self.max_passage_length)
+        target = self._pad_tokens(target, self.max_passage_length, add_sos_and_eos=True)
 
         return input, target
 
@@ -231,7 +237,7 @@ class OpenWebTextDataset(Dataset):
             passage += line
 
         tokens = self.vocab.tokenize(passage)
-        tokens = self._pad_tokens(tokens, self.max_passage_length)
+        tokens = self._pad_tokens(tokens, self.max_passage_length, add_sos_and_eos=True)
         input, target = [], []
         for token in tokens:
             if random.random() <= MASKING_PROB:
@@ -250,13 +256,24 @@ class OpenWebTextDataset(Dataset):
         return input, target
 
     def _pad_tokens(
-        self: Self, tokens: list[int], n: int, trim_left: bool = False
+        self: Self,
+        tokens: list[int],
+        n: int,
+        trim_left: bool = False,
+        add_sos_and_eos: bool = False,
     ) -> list[int]:
-        if len(tokens) >= n:
-            return tokens[-n:] if trim_left else tokens[:n]
+        if add_sos_and_eos:
+            n -= 1
+        if len(tokens) > n:
+            tokens = tokens[-n:] if trim_left else tokens[:n]
 
-        for _ in range(n - len(tokens)):
-            tokens.append(self.vocab.PAD_IDX)
+        num_pads = n - len(tokens)
+
+        if add_sos_and_eos:
+            tokens.insert(0, self.vocab.SOS_IDX)
+            tokens.append(self.vocab.EOS_IDX)
+
+        tokens.extend(self.vocab.PAD_IDX for _ in range(num_pads))
 
         return tokens
 
@@ -272,48 +289,47 @@ class OpenWebTextDataset(Dataset):
         return nltk.sent_tokenize(passage)
 
     def _process_file(self: Self, file: str) -> dict:
-        sentences = []
-        num_passages = 0
-        num_sentences = 0
+        passages = []
 
         for passage in self._read_jsonl(file):
-            new_sentences = self._tokenize_passage(passage["text"])
-            sentences.extend(new_sentences)
+            sentences = self._tokenize_passage(passage["text"])
             sentences.append(PASSAGE_END)
-            num_sentences += len(new_sentences)
-            num_passages += 1
+            passages.append(sentences)
 
-        return {
-            "sentences": sentences,
-            "num_passages": num_passages,
-            "num_sentences": num_sentences,
-        }
+        return passages
 
     def _process_data(self: Self) -> dict:
-        num_passages = 0
-        num_sentences = 0
+        passages = []
 
         num_processes = 64
         compressor = zstd.ZstdCompressor()
 
-        with (
-            mp.Pool(num_processes) as p,
-            open(self.data_dir / self.processed_file_name, "wb+") as f,
-            compressor.stream_writer(f) as compressed_writer,
-        ):
+        with mp.Pool(num_processes) as p:
             m = p.imap(self._process_file, self.files)
 
-            for r in tqdm(m, total=len(self.files)):
-                for sentence in r["sentences"]:
-                    compressed_writer.write(json.dumps(sentence).encode() + b"\n")
+            for r in tqdm(m, total=len(self.files), desc="reading unprocessed..."):
+                passages.extend(r)
 
-                num_passages += r["num_passages"]
-                num_sentences += r["num_sentences"]
+        num = len(passages) // self.num_processed_files
 
-        info_json = {
-            "num_passages": num_passages,
-            "num_sentences": num_sentences,
-        }
+        info_json = []
+
+        for n in tqdm(range(self.num_processed_files), desc="writing processed..."):
+            with (
+                open(self.data_dir /self.processed_folder_name / f"{n}.zst", "wb+") as f,
+                compressor.stream_writer(f) as compressed_writer,
+            ):
+                num_passages = 0
+                num_sentences = 0
+                for idx in range(n * num, (n + 1) * num):
+                    for sentence in passages[idx]:
+                        compressed_writer.write(json.dumps(sentence).encode() + b"\n")
+                        num_sentences += 1
+                    num_passages += 1
+
+                info_json.append(
+                    {"num_passages": num_passages, "num_sentences": num_sentences}
+                )
 
         with open(self.data_dir / self.info_file_name, "w+") as f:
             json.dump(info_json, f)

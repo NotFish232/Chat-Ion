@@ -12,10 +12,12 @@ BASE_DIR = Path(__file__).parents[1]
 class ModelLoader:
     def __init__(
         self: Self,
-        checkpoint_dir: str = "./checkpoints",
-        model_dir: str = "./trained_models",
+        model_name: str,
+        checkpoint_dir: str = "checkpoints",
+        model_dir: str = "trained_models",
         preserve_old: bool = True,
     ) -> None:
+        self.model_name = model_name
         self.checkpoint_dir = BASE_DIR / checkpoint_dir
         self.model_dir = BASE_DIR / model_dir
         self.preserve_old = preserve_old
@@ -67,7 +69,7 @@ class ModelLoader:
                 "epochs": epochs,
                 "accuracy": accuracy,
             },
-            f"{self.checkpoint_dir}/checkpoint-{epochs}-{100 * accuracy:05.2f}.pt",
+            self.checkpoint_dir / f"checkpoint-{epochs}-{100 * accuracy:05.2f}.pt",
         )
 
     def save_model(self: Self, network: nn.Module) -> None:

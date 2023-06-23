@@ -2,15 +2,15 @@ from argparse import ArgumentParser
 
 DEFAULT_MODEL_NAME = "model"
 DEFAULT_EPOCHS = 10
-DEFAULT_BATCH_SIZE = 256
-DEFAULT_LR = 1e-4
-DEFAULT_WEIGHT_DECAY = 1e-3
-DEFAULT_CHECKPOINT_INTERVAL = 2
+DEFAULT_BATCH_SIZE = 32
+DEFAULT_LR = 2e-5
+DEFAULT_WEIGHT_DECAY = 1e-2
+DEFAULT_CHECKPOINT_INTERVAL = 1_000_000
 DEFAULT_DEVICE = "cuda"
 
 DEFAULT_DROPUT = 1e-1
-DEFAULT_EMBED_DIM = 256
-DEFAULT_MAX_SEQ_LEN = 500
+DEFAULT_EMBED_DIM = 1024
+DEFAULT_MAX_SEQ_LEN = 512
 DEFAULT_NUM_ENCODER_LAYERS = 6
 DEFAULT_NUM_DECODER_LAYERS = 6
 DEFAULT_NUM_HEADS = 8
@@ -61,7 +61,7 @@ def get_args() -> dict:
         "--checkpoint-interval",
         type=int,
         default=DEFAULT_CHECKPOINT_INTERVAL,
-        help=f"checkpoint freq in epochs, defaults to '{DEFAULT_CHECKPOINT_INTERVAL}'",
+        help=f"checkpoint freq in batches, defaults to '{DEFAULT_CHECKPOINT_INTERVAL}'",
     )
     train_group.add_argument(
         "-d",
