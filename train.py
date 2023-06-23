@@ -9,7 +9,7 @@ from tqdm import tqdm
 BATCH_SIZE = 256
 NUM_EPOCHS = 20
 EMBED_DIM = 256
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4
 
 
 def main() -> None:
