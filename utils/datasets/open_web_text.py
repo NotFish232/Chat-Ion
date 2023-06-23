@@ -83,12 +83,12 @@ class OpenWebTextDataset(Dataset):
 
         self.current_idx = 0
 
-        # necessry bc apparently you cant prev an iter
-        if self.mode == Modes.SentToSent:
-            self.previous_sentence = None
-
         sentence_iterator = self._read_jsonl(self.data_dir / processed_file_name)
         self.sentence_gen = itertools.cycle(sentence_iterator)
+
+        # necessry bc apparently you cant prev an iter
+        if self.mode == Modes.SentToSent:
+            self.previous_sentence = next(self.sentence_gen)
 
     def __len__(self: Self) -> int:
         return (
@@ -105,9 +105,6 @@ class OpenWebTextDataset(Dataset):
     """
 
     def __getitem__(self: Self, idx: int) -> tuple:
-        if self.mode == Modes.SentToSent and self.previous_sentence is None:
-            self.previous_sentence = next(self.sentence_gen)
-
         while self.current_idx != idx:
             line = next(self.sentence_gen)
 
@@ -121,34 +118,142 @@ class OpenWebTextDataset(Dataset):
                 if line == PASSAGE_END:
                     self.current_idx += 1
 
-        if self.mode == Modes.Masking:
-            passage = ""
+            if self.current_idx == len(self):
+                self.current_idx = 0
 
-            while True:
-                line = next(self.sentence_gen)
-                if line == PASSAGE_END:
-                    break
-                passage += line
+        if self.mode == Modes.SentToSent:
+            input, target = self._make_sent_to_sent_task()
+        elif self.mode == Modes.SentToPass:
+            input, target = self._make_sent_to_pass_task()
+        elif self.mode == Modes.PassToSent:
+            input, target = self._make_pass_to_sent_task()
+        elif self.mode == Modes.PassToPass:
+            input, target = self._make_pass_to_pass_task()
+        elif self.mode == Modes.Masking:
+            input, target = self._make_masking_task()
 
-            tokens = self.vocab.tokenize(passage)
-            input = []
-            label = []
-            for token in tokens:
-                if random.random() <= MASKING_PROB:
-                    prob = random.random()
+        self.current_idx += 1
+        if self.current_idx == len(self):
+            self.current_idx = 0
 
-                    if prob < ACTUAL_WORD_PROB:
-                        input.append(token)
-                    elif prob < ACTUAL_WORD_PROB + RANDOM_WORD_PROB:
-                        input.append(random.randint(0, self.vocab.num_reg_tokens - 1))
-                    else:
-                        input.append(self.vocab.MASK_IDX)
-                    label.append(token)
-                else:
+        if self.transforms is not None:
+            input = self.transforms(input)
+        if self.target_transforms is not None:
+            target = self.target_transforms(target)
+
+        return input, target
+
+    def _make_sent_to_sent_task(self: Self) -> tuple[list[int], list[int]]:
+        input = self.previous_sentence
+        target = next(self.sentence_gen)
+        if target == PASSAGE_END:
+            input = next(self.sentence_gen)
+            target = next(self.sentence_gen)
+        self.previous_sentence = target
+
+        input = self.vocab.tokenize(input)
+        target = self.vocab.tokenize(target)
+
+        input = self._pad_tokens(input, self.max_sentence_length, True)
+        target = self._pad_tokens(target, self.max_sentence_length)
+
+        return input, target
+
+    def _make_sent_to_pass_task(self: Self) -> tuple[list[int], list[int]]:
+        input = next(self.sentence_gen)
+        target = ""
+
+        while True:
+            line = next(self.sentence_gen)
+            if line == PASSAGE_END:
+                break
+            target += line 
+        
+        input = self.vocab.tokenize(input)
+        target = self.vocab.tokenize(target)
+
+        input = self._pad_tokens(input, self.max_sentence_length, True)
+        target = self._pad_tokens(target, self.max_passage_length)
+        
+        return input, target
+
+    def _make_pass_to_sent_task(self: Self) -> tuple[list[int], list[int]]:
+        sentences = []
+
+        while True:
+            line = next(self.sentence_gen)
+            if line == PASSAGE_END:
+                break
+            sentences.append(line)
+        
+        input = "".join(sentences[:-1])
+        target = sentences[-1]
+
+        input = self.vocab.tokenize(input)
+        target = self.vocab.tokenize(target)
+
+        input = self._pad_tokens(input, self.max_passage_length, True)
+        target = self._pad_tokens(target, self.max_sentence_length)
+
+        return input, target
+    
+    def _make_pass_to_pass_task(self: Self) -> tuple[list[int], list[int]]:
+        sentences = []
+
+        while True:
+            line = next(self.sentence_gen)
+            if line == PASSAGE_END:
+                break
+            sentences.append(line)
+
+        middle = len(sentences) // 2 + 1
+        
+        input = "".join(sentences[:middle])
+        target = "".join(sentences[middle:])
+
+        input = self.vocab.tokenize(input)
+        target = self.vocab.tokenize(target)
+
+        input = self._pad_tokens(input, self.max_passage_length, True)
+        target = self._pad_tokens(target, self.max_passage_length)
+
+        return input, target
+
+    def _make_masking_task(self: Self) -> tuple[list[int], list[int]]:
+        passage = ""
+        while True:
+            line = next(self.sentence_gen)
+            if line == PASSAGE_END:
+                break
+            passage += line
+
+        tokens = self.vocab.tokenize(passage)
+        tokens = self._pad_tokens(tokens, self.max_passage_length)
+        input, target = [], []
+        for token in tokens:
+            if random.random() <= MASKING_PROB:
+                prob = random.random()
+                if prob < ACTUAL_WORD_PROB:
                     input.append(token)
-                    label.append(self.vocab.PAD_IDX)
+                elif prob < ACTUAL_WORD_PROB + RANDOM_WORD_PROB:
+                    input.append(random.randint(0, self.vocab.num_reg_tokens - 1))
+                else:
+                    input.append(self.vocab.MASK_IDX)
+                target.append(token)
+            else:
+                input.append(token)
+                target.append(self.vocab.PAD_IDX)
 
-            return input, label
+        return input, target
+
+    def _pad_tokens(self: Self, tokens: list[int], n: int, trim_left: bool = False) -> list[int]:
+        if len(tokens) >= n:
+            return tokens[-n:] if trim_left else tokens[:n]
+
+        for _ in range(n - len(tokens)):
+            tokens.append(self.vocab.PAD_IDX)
+
+        return tokens
 
     @staticmethod
     def _read_jsonl(file_path: str) -> Iterator[str]:
