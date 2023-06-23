@@ -40,7 +40,6 @@ RANDOM_WORD_PROB = 0.1
 ACTUAL_WORD_PROB = 0.1
 
 
-
 class OpenWebTextDataset(Dataset):
     def __init__(
         self: Self,
@@ -49,7 +48,8 @@ class OpenWebTextDataset(Dataset):
         unprocessed_file_dir: str = "unprocessed",
         processed_file_name: str = "processed.zst",
         info_file_name: str = "info.json",
-        max_sentence_length: int = 256,
+        max_sentence_length: int = 64,
+        max_passage_length: int = 256,
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
@@ -67,6 +67,7 @@ class OpenWebTextDataset(Dataset):
         self.info_file_name = info_file_name
 
         self.max_sentence_length = max_sentence_length
+        self.max_passage_length = max_passage_length
 
         self.transforms = transforms
         self.target_transforms = target_transforms
@@ -161,30 +162,28 @@ class OpenWebTextDataset(Dataset):
         return nltk.sent_tokenize(passage)
 
     def _process_file(self: Self, file: str) -> dict:
-        passages = b""
+        sentences = []
         num_passages = 0
         num_sentences = 0
 
         for passage in self._read_jsonl(file):
-            sentences = self._tokenize_passage(passage["text"])
-            for sentence in sentences:
-                passages += json.dumps(sentence).encode() + b"\n"
-                num_sentences += 1
-            passages += json.dumps(PASSAGE_END).encode() + b"\n"
+            new_sentences = self._tokenize_passage(passage["text"])
+            sentences.extend(new_sentences)
+            sentences.append(PASSAGE_END)
+            num_sentences += len(new_sentences)
             num_passages += 1
 
         return {
-            "content": passages,
+            "sentences": sentences,
             "num_passages": num_passages,
-            "num_sentences": num_sentences
+            "num_sentences": num_sentences,
         }
 
     def _process_data(self: Self) -> dict:
-        num_processes = 32
-
         num_passages = 0
         num_sentences = 0
 
+        num_processes = 64
         compressor = zstd.ZstdCompressor()
 
         with (
@@ -195,8 +194,9 @@ class OpenWebTextDataset(Dataset):
             m = p.imap(self._process_file, self.files)
 
             for r in tqdm(m, total=len(self.files)):
-                compressed_writer.write(r["content"])
-    
+                for sentence in r["sentences"]:
+                    compressed_writer.write(json.dumps(sentence).encode() + b"\n")
+
                 num_passages += r["num_passages"]
                 num_sentences += r["num_sentences"]
 

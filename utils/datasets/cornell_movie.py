@@ -14,7 +14,7 @@ class CornellMovieDataset(Dataset):
         folder_name: str = "cornell",
         unprocessed_file_name: str = "raw.json",
         processed_file_name: str = "processed.json",
-        max_sentence_length: int = 256,
+        max_sentence_length: int = 64,
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
