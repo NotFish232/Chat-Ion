@@ -34,19 +34,19 @@ class Vocabulary:
             upper_words = [w.upper() for w in words]
             all_words = lower_words + capital_words + upper_words
 
-            tokens = list(set(self.tokenizer.tokenize(" ".join(all_words))))
-            tokens += list(string.punctuation)
-            tokens += SPECIAL_TOKENS
+            self.tokens = list(set(self.tokenizer.tokenize(" ".join(all_words))))
+            self.tokens += list(string.punctuation)
+            self.tokens += SPECIAL_TOKENS
 
             with open(vocab_file_path, "w+") as f:
-                json.dump(tokens, f)
+                json.dump(self.tokens, f)
         else:
             with open(vocab_file_path, "r") as f:
-                tokens = json.load(f)
+                self.tokens = json.load(f)
 
-        self.token_to_idx = dict(zip(tokens, range(len(tokens))))
+        self.token_to_idx = dict(zip(self.tokens, range(self.num_tokens)))
         self.idx_to_token = {v: k for k, v in self.token_to_idx.items()}
-
+        
         self.SOS_IDX = self.token_to_idx["<sos>"]
         self.EOS_IDX = self.token_to_idx["<eos>"]
         self.MASK_IDX = self.token_to_idx["<mask>"]
@@ -54,6 +54,14 @@ class Vocabulary:
         self.PAD_IDX = self.token_to_idx["<pad>"]
         self.CLS_IDX = self.token_to_idx["<cls>"]
         self.SEP_IDX = self.token_to_idx["<sep>"]
+    
+    @property
+    def num_tokens(self: Self) -> int:
+        return len(self.tokens)
+
+    @property
+    def num_reg_tokens(self: Self) -> int:
+        return self.num_tokens - len(SPECIAL_TOKENS)
 
     def __new__(self: Self) -> "Vocabulary":
         if not hasattr(self, "instance"):

@@ -3,8 +3,11 @@ import json
 import multiprocessing as mp
 from enum import Enum
 from typing import Callable, Iterator
+import itertools
 
+import random
 import nltk
+from .vocabulary import Vocabulary
 import zstandard as zstd
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -32,6 +35,11 @@ class Modes(Enum):
 
 PASSAGE_END = "### PASSAGE END ###"
 
+MASKING_PROB = 0.15
+RANDOM_WORD_PROB = 0.1
+ACTUAL_WORD_PROB = 0.1
+
+
 
 class OpenWebTextDataset(Dataset):
     def __init__(
@@ -41,6 +49,7 @@ class OpenWebTextDataset(Dataset):
         unprocessed_file_dir: str = "unprocessed",
         processed_file_name: str = "processed.zst",
         info_file_name: str = "info.json",
+        max_sentence_length: int = 256,
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
@@ -57,8 +66,12 @@ class OpenWebTextDataset(Dataset):
         self.processed_file_name = processed_file_name
         self.info_file_name = info_file_name
 
+        self.max_sentence_length = max_sentence_length
+
         self.transforms = transforms
         self.target_transforms = target_transforms
+
+        self.vocab = Vocabulary()
 
         self.files = list((self.data_dir / unprocessed_file_dir).glob("*.jsonl.zst"))
 
@@ -73,14 +86,13 @@ class OpenWebTextDataset(Dataset):
         if self.mode == Modes.SentToSent:
             self.previous_sentence = None
 
-        self.sentence_gen = self._read_jsonl(self.data_dir / processed_file_name)
+        sentence_iterator = self._read_jsonl(self.data_dir / processed_file_name)
+        self.sentence_gen = itertools.cycle(sentence_iterator)
 
     def __len__(self: Self) -> int:
         return (
             self.num_sentences - self.num_passages
             if self.mode == Modes.SentToSent
-            else self.num_sentences
-            if self.mode == Modes.Masking
             else self.num_passages
         )
 
@@ -92,20 +104,50 @@ class OpenWebTextDataset(Dataset):
     """
 
     def __getitem__(self: Self, idx: int) -> tuple:
-        if self.mode == "sentence_to_sentence" and self.previous_sentence is None:
-            self.previous_sentence = json.loads(next(self.sentence_gen))
+        if self.mode == Modes.SentToSent and self.previous_sentence is None:
+            self.previous_sentence = next(self.sentence_gen)
 
         while self.current_idx != idx:
-            line = json.loads(next(self.sentence_gen))
+            line = next(self.sentence_gen)
 
-            if self.mode == "sentence_to_sentence":
+            if self.mode == Modes.SentToSent:
                 if line != PASSAGE_END:
                     self.current_idx += 1
+                    self.previous_sentence = line
                 else:
                     self.previous_sentence = None
             else:
                 if line == PASSAGE_END:
                     self.current_idx += 1
+
+        if self.mode == Modes.Masking:
+            passage = ""
+
+            while True:
+                line = next(self.sentence_gen)
+                if line == PASSAGE_END:
+                    break
+                passage += line
+
+            tokens = self.vocab.tokenize(passage)
+            input = []
+            label = []
+            for token in tokens:
+                if random.random() <= MASKING_PROB:
+                    prob = random.random()
+
+                    if prob < ACTUAL_WORD_PROB:
+                        input.append(token)
+                    elif prob < ACTUAL_WORD_PROB + RANDOM_WORD_PROB:
+                        input.append(random.randint(0, self.vocab.num_reg_tokens - 1))
+                    else:
+                        input.append(self.vocab.MASK_IDX)
+                    label.append(token)
+                else:
+                    input.append(token)
+                    label.append(self.vocab.PAD_IDX)
+
+            return input, label
 
     @staticmethod
     def _read_jsonl(file_path: str) -> Iterator[str]:
@@ -113,34 +155,35 @@ class OpenWebTextDataset(Dataset):
         with open(file_path, "rb") as f:
             reader = io.BufferedReader(zstd_ctx.stream_reader(f))
             for line in reader:
-                json_line = json.loads(line)
-                yield json_line["text"]
-
-    def _tokenize_sentence(self: Self, sentence: str) -> list[str]:
-        return nltk.word_tokenize(sentence)
+                yield json.loads(line)
 
     def _tokenize_passage(self: Self, passage: str) -> list[str]:
         return nltk.sent_tokenize(passage)
 
     def _process_file(self: Self, file: str) -> dict:
-        sentences = []
+        passages = b""
         num_passages = 0
+        num_sentences = 0
 
         for passage in self._read_jsonl(file):
-            new_sentences = self._tokenize_passage(passage)
-            sentences.extend(new_sentences)
+            sentences = self._tokenize_passage(passage["text"])
+            for sentence in sentences:
+                passages += json.dumps(sentence).encode() + b"\n"
+                num_sentences += 1
+            passages += json.dumps(PASSAGE_END).encode() + b"\n"
             num_passages += 1
 
         return {
-            "sentences": sentences,
+            "content": passages,
             "num_passages": num_passages,
+            "num_sentences": num_sentences
         }
 
     def _process_data(self: Self) -> dict:
         num_processes = 32
 
-        num_sentences = 0
         num_passages = 0
+        num_sentences = 0
 
         compressor = zstd.ZstdCompressor()
 
@@ -152,19 +195,14 @@ class OpenWebTextDataset(Dataset):
             m = p.imap(self._process_file, self.files)
 
             for r in tqdm(m, total=len(self.files)):
-                for sentence in r["sentences"]:
-                    compressed_writer.write(
-                        json.dumps(sentence).encode("utf-8") + b"\n"
-                    )
-                    num_sentences += 1
-
-                compressed_writer.write(json.dumps(PASSAGE_END).encode("utf-8") + b"\n")
-
+                compressed_writer.write(r["content"])
+    
                 num_passages += r["num_passages"]
+                num_sentences += r["num_sentences"]
 
         info_json = {
-            "num_sentences": num_sentences,
             "num_passages": num_passages,
+            "num_sentences": num_sentences,
         }
 
         with open(self.data_dir / self.info_file_name, "w+") as f:
