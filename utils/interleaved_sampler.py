@@ -1,6 +1,7 @@
+from typing import Iterator
+
 from torch.utils.data.distributed import Sampler
 from typing_extensions import Self
-from typing import Iterator
 
 
 class InterleavedSampler(Sampler):

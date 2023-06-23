@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import torch as T
@@ -5,18 +6,16 @@ from torch import nn, optim
 from torch.cuda import amp
 from torch.optim import lr_scheduler
 from typing_extensions import Self
-import json
 
 BASE_DIR = Path(__file__).parents[1]
-
 
 DEFAULT_SAVE_KEYS = [
     "network",
     "optimizer",
     "scheduler",
     "scaler",
-    "epochs",
     "accuracy",
+    "epochs",
 ]
 
 
@@ -25,16 +24,18 @@ class ModelManager:
         self: Self,
         model_name: str,
         save_keys: list[str] = DEFAULT_SAVE_KEYS,
+        max_num_checkpoints: int = 3,
         checkpoint_dir: str = "checkpoints",
         model_dir: str = "trained_models",
     ) -> None:
         self.model_name = model_name
         self.save_keys = save_keys
+        self.max_num_checkpoints = max_num_checkpoints
         self.checkpoint_dir = BASE_DIR / checkpoint_dir / model_name
         self.model_dir = BASE_DIR / model_dir / model_name
 
         self.checkpoint_dir.mkdir(exist_ok=True)
-        self.model_dir.mkdir(exists_ok=True)
+        self.model_dir.mkdir(exist_ok=True)
 
     def checkpoint_exists(self: Self) -> bool:
         return len(list(self.checkpoint_dir.glob("*.pt"))) != 0
@@ -57,7 +58,7 @@ class ModelManager:
 
         return info
 
-    def load_checkpoint(self: Self, *kwargs: tuple) -> tuple:
+    def load_checkpoint(self: Self, *args: tuple) -> tuple:
         if not self.checkpoint_exists():
             return None
 
@@ -67,27 +68,37 @@ class ModelManager:
         most_recent_checkpoint = T.load(most_recent_checkpoint)
 
         return_values = []
-        for key, value in most_recent_checkpoint.items():
-            if key in kwargs.keys():
-                kwargs[key].load_state_dict(value)
+        arg_idx = 0
+        for value in most_recent_checkpoint.values():
+            if isinstance(value, dict):
+                args[arg_idx].load_state_dict(value)
+                arg_idx += 1
             else:
                 return_values.append(value)
 
         return tuple(return_values)
 
     def save_checkpoint(self: Self, *args: tuple) -> None:
-        checkpoint = {}
+        checkpoint_dict = {}
         for key, value in zip(self.save_keys, args):
             if hasattr(value, "state_dict"):
-                checkpoint[key] = value.state_dict()
+                checkpoint_dict[key] = value.state_dict()
             else:
-                checkpoint[key] = value
+                checkpoint_dict[key] = value
 
         checkpoints = list(self.checkpoint_dir.glob("*.pt"))
         checkpoint_num = len(checkpoints) + 1
 
+        if checkpoint_num > self.max_num_checkpoints:
+            checkpoints.pop(0).unlink()
+
+            for idx, checkpoint in enumerate(checkpoints):
+                checkpoint.rename(self.checkpoint_dir / f"checkpoint-{idx + 1}.pt")
+
+            checkpoint_num -= 1
+
         T.save(
-            checkpoint,
+            checkpoint_dict,
             self.checkpoint_dir / f"checkpoint-{checkpoint_num}.pt",
         )
 

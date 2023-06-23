@@ -1,6 +1,7 @@
 import logging
+import os
 from typing import Callable
-from tqdm import tqdm
+
 import torch as T
 import torch.multiprocessing as mp
 from torch import distributed as dist
@@ -9,12 +10,12 @@ from torch.cuda import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 from torch.utils.data import DataLoader
-from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import Lambda
+from tqdm import tqdm
 
 from models import Network
 from train.arg_parser import get_args
-from utils import ModelManager, make_look_ahead_mask, Vocabulary, InterleavedSampler
+from utils import *
 from utils.datasets import CornellMovieDataset
 
 
@@ -75,11 +76,15 @@ def prepare_network(
 
 
 def prepare_logger(rank: int, world_size: int) -> logging.Logger:
-    logger = logging.getLogger(__name__)
-    if is_main_process(rank, world_size):
-        logger.setLevel(logging.INFO)
-    else:
-        logger.setLevel(logging.CRITICAL)
+    logger = logging.getLogger(f"{__name__}:{rank}")
+
+    level = logging.INFO if is_main_process(rank, world_size) else logging.CRITICAL
+    logger.setLevel(level)
+
+    ch = logging.StreamHandler()
+    ch.setLevel(level)
+    logger.addHandler(ch)
+
     return logger
 
 
@@ -98,6 +103,7 @@ def training_loop(
 ) -> None:
     logger = prepare_logger(rank, world_size)
     device = T.device(f"cuda:{rank}" if rank != -1 else device)
+
     vocab = Vocabulary()
 
     transforms = Lambda(lambda x: T.tensor(x, device=device))
@@ -124,23 +130,20 @@ def training_loop(
     )
     scheduler = CosineAnnealingWarmRestarts(optimizer, 20)
 
-    scaler = amp.GradScaler()
+    scaler = amp.GradScaler() if device.type == "cuda" else None
 
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.PAD_IDX)
 
-    model_loader = ModelManager(model_name)
+    model_mgr = ModelManager(model_name)
 
-    if model_loader.checkpoint_exists():
+    if model_mgr.checkpoint_exists():
         logger.info("Checkpoint exists, loading save!")
-        x = model_loader.load_checkpoint()
-        network.load_state_dict(x["network"])
-        optimizer.load_state_dict(x["optimizer"])
-        scheduler.load_state_dict(x["scheduler"])
-        scaler.load_state_dict(x["scaler"])
-        starting_epochs = x["epochs"]
+        checkpoint = model_mgr.load_checkpoint(network, optimizer, scheduler, scaler)
+        starting_epochs, starting_accuracy = checkpoint
     else:
         logger.info("Checkpoint doesn't exist, creating new model.")
         starting_epochs = 0
+        starting_accuracy = 0
 
     for epoch in range(starting_epochs + 1, starting_epochs + epochs + 1):
         num_correct = 0
@@ -182,19 +185,20 @@ def training_loop(
                 optimizer.step()
 
             optimizer.zero_grad()
-
             scheduler.step()
 
             num_correct += T.sum(T.argmax(y, dim=-1) == labels_expected).item()
             num_total += prompts.size(0) * prompts.size(1)
 
             if (
-                is_main_process(rank, world_size)
+                batch_idx != 0
                 and batch_idx % checkpoint_interval == 0
+                and is_main_process(rank, world_size)
             ):
                 logger.info("Saving checkpoint...")
-                model_loader.save_checkpoint(
-                    network, optimizer, scheduler, scaler, epoch
+                accuracy = num_correct / num_total
+                model_mgr.save_checkpoint(
+                    network, optimizer, scheduler, scaler, epoch, accuracy
                 )
 
         avg_loss = total_loss / len(dataloader)
@@ -202,7 +206,7 @@ def training_loop(
         accuracy = num_correct / num_total
         logger.info(f"Accuracy: {accuracy:.2%}, loss: {avg_loss:.2f}")
 
-    model_loader.save_model(network)
+    model_mgr.save_model(network, model_kwargs)
 
     cleanup_distibuted()
 
@@ -223,10 +227,11 @@ def main() -> None:
 
     if training_args["device"] == "cuda":
         world_size = T.cuda.device_count()
+        os.environ["OPENBLAS_NUM_THREADS"] = "20"
         mp.spawn(
             _training_loop_helper,
             args=(world_size, training_args | {"model_kwargs": model_args}),
-            nprocs=world_size,
+            nprocs=6,
             join=True,
         )
     else:
