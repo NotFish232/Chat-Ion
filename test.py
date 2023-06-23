@@ -29,9 +29,9 @@ def main():
     while user_input != "quit":
         user_input = input(">> ")
         words = user_input.split(" ")
-        sentence = T.tensor(dataset.tokenize_sentence(words), dtype=T.int32, device=device)
+        sentence = T.tensor(dataset.tokenize_sentence(words, device=device))
         with T.no_grad():
-            y = T.argmax(network(sentence, T.zeros(dataset.max_sentence_length)), dim=1)
+            y = T.argmax(network(sentence, T.zeros(dataset.max_sentence_length, dtype=T.int32)), dim=1)
         response = "".join(map(lambda x: dataset.rvocab[x], y))
         print(response)
 
