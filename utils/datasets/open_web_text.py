@@ -121,16 +121,19 @@ class OpenWebTextDataset(Dataset):
             if self.current_idx == len(self):
                 self.current_idx = 0
 
-        if self.mode == Modes.SentToSent:
-            input, target = self._make_sent_to_sent_task()
-        elif self.mode == Modes.SentToPass:
-            input, target = self._make_sent_to_pass_task()
-        elif self.mode == Modes.PassToSent:
-            input, target = self._make_pass_to_sent_task()
-        elif self.mode == Modes.PassToPass:
-            input, target = self._make_pass_to_pass_task()
-        elif self.mode == Modes.Masking:
-            input, target = self._make_masking_task()
+        input, target = (
+            self._make_sent_to_sent_task()
+            if self.mode == Modes.SentToSent
+            else self._make_sent_to_pass_task()
+            if self.mode == Modes.SentToPass
+            else self._make_pass_to_sent_task()
+            if self.mode == Modes.PassToSent
+            else self._make_pass_to_pass_task()
+            if self.mode == Modes.PassToPass
+            else self._make_masking_task()
+            if self.mode == Modes.Masking
+            else None, None
+        )
 
         self.current_idx += 1
         if self.current_idx == len(self):
@@ -167,14 +170,14 @@ class OpenWebTextDataset(Dataset):
             line = next(self.sentence_gen)
             if line == PASSAGE_END:
                 break
-            target += line 
-        
+            target += line
+
         input = self.vocab.tokenize(input)
         target = self.vocab.tokenize(target)
 
         input = self._pad_tokens(input, self.max_sentence_length, True)
         target = self._pad_tokens(target, self.max_passage_length)
-        
+
         return input, target
 
     def _make_pass_to_sent_task(self: Self) -> tuple[list[int], list[int]]:
@@ -185,7 +188,7 @@ class OpenWebTextDataset(Dataset):
             if line == PASSAGE_END:
                 break
             sentences.append(line)
-        
+
         input = "".join(sentences[:-1])
         target = sentences[-1]
 
@@ -196,7 +199,7 @@ class OpenWebTextDataset(Dataset):
         target = self._pad_tokens(target, self.max_sentence_length)
 
         return input, target
-    
+
     def _make_pass_to_pass_task(self: Self) -> tuple[list[int], list[int]]:
         sentences = []
 
@@ -207,7 +210,7 @@ class OpenWebTextDataset(Dataset):
             sentences.append(line)
 
         middle = len(sentences) // 2 + 1
-        
+
         input = "".join(sentences[:middle])
         target = "".join(sentences[middle:])
 
@@ -246,7 +249,9 @@ class OpenWebTextDataset(Dataset):
 
         return input, target
 
-    def _pad_tokens(self: Self, tokens: list[int], n: int, trim_left: bool = False) -> list[int]:
+    def _pad_tokens(
+        self: Self, tokens: list[int], n: int, trim_left: bool = False
+    ) -> list[int]:
         if len(tokens) >= n:
             return tokens[-n:] if trim_left else tokens[:n]
 
