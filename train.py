@@ -46,7 +46,7 @@ def main() -> None:
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-        print(f"Loss {acc_loss:.2f}")
+        print(f"Loss: {acc_loss:.2f}")
     T.save(network.state_dict(), "trained_model.pt")
 
 
