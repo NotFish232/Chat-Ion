@@ -1,8 +1,9 @@
+import math
+
 import torch as T
 from torch import nn
 from torch.nn import functional as F
 from typing_extensions import Self
-import math
 
 
 class PositionalEncoding(nn.Module):

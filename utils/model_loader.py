@@ -1,8 +1,9 @@
+from pathlib import Path
+
 import torch as T
 from torch import nn, optim
 from torch.optim import lr_scheduler
 from typing_extensions import Self
-from pathlib import Path
 
 BASE_DIR = Path(__file__).parents[1]
 

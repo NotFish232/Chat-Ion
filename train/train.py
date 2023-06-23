@@ -1,15 +1,16 @@
-from models import Network
-from utils.model_loader import ModelLoader
-from utils.datasets import CornellMovieDataset
-from train.arg_parser import get_args
+from argparse import Namespace
 
 import torch as T
-from torch import optim, nn
-from torch.utils.data import DataLoader
+from torch import nn, optim
 from torch.optim import lr_scheduler
+from torch.utils.data import DataLoader
 from torchvision.transforms import Lambda
 from tqdm import tqdm
-from argparse import Namespace
+
+from models import Network
+from train.arg_parser import get_args
+from utils.datasets import CornellMovieDataset
+from utils.model_loader import ModelLoader
 
 
 def training_loop(args: Namespace) -> None:

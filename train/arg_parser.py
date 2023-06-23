@@ -1,6 +1,5 @@
 from argparse import ArgumentParser, Namespace
 
-
 DEFAULT_EPOCHS = 10
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_LR = 1e-4
@@ -37,14 +36,14 @@ def get_args() -> Namespace:
         "--learning-rate",
         type=int,
         default=DEFAULT_LR,
-        help=f"learning rate, defaults to '{DEFAULT_LR}'"
+        help=f"learning rate, defaults to '{DEFAULT_LR}'",
     )
     args.add_argument(
         "-wd",
         "--weight-decay",
         type=int,
         default=DEFAULT_WEIGHT_DECAY,
-        help=f"weight decay, defaults to '{DEFAULT_WEIGHT_DECAY}'"
+        help=f"weight decay, defaults to '{DEFAULT_WEIGHT_DECAY}'",
     )
     args.add_argument(
         "-d",
@@ -82,8 +81,7 @@ def get_args() -> Namespace:
         help=f"max seq len of output, defaults to '{DEFAULT_TGT_SEQ_LEN}'",
     )
     args.add_argument(
-        "-ne"
-        "--num-enc-layers",
+        "-ne" "--num-enc-layers",
         type=int,
         default=DEFAULT_NUM_ENCODER_LAYERS,
         help=f"number of encoder layers, defaults to '{DEFAULT_NUM_ENCODER_LAYERS}'",

@@ -1,10 +1,11 @@
-from torch.utils.data import Dataset
-from typing_extensions import Self
-from typing import Iterator, Callable
 import json
 import os
-from string import punctuation
 from collections import Counter
+from string import punctuation
+from typing import Callable, Iterator
+
+from torch.utils.data import Dataset
+from typing_extensions import Self
 
 
 class CornellMovieDataset(Dataset):

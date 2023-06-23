@@ -1,8 +1,10 @@
+import warnings
+
 import torch as T
+
 from models import Network
 from utils.dataset import CornellMovieDataset
 from utils.model_loader import ModelLoader
-import warnings
 
 EMBED_DIM = 512
 
