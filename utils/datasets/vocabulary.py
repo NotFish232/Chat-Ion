@@ -35,8 +35,11 @@ class Vocabulary:
             all_words = lower_words + capital_words + upper_words
 
             self.tokens = list(set(self.tokenizer.tokenize(" ".join(all_words))))
+            for punct in string.punctuation:
+                if punct in self.tokens:
+                    self.tokens.remove(punct)
             self.tokens += list(string.punctuation)
-            self.tokens += SPECIAL_TOKENS
+            self.tokens += SPECIAL_TOKENS 
 
             with open(vocab_file_path, "w+") as f:
                 json.dump(self.tokens, f)
@@ -46,7 +49,7 @@ class Vocabulary:
 
         self.token_to_idx = dict(zip(self.tokens, range(self.num_tokens)))
         self.idx_to_token = {v: k for k, v in self.token_to_idx.items()}
-        
+
         self.SOS_IDX = self.token_to_idx["<sos>"]
         self.EOS_IDX = self.token_to_idx["<eos>"]
         self.MASK_IDX = self.token_to_idx["<mask>"]
