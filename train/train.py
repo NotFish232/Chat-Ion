@@ -14,7 +14,7 @@ from torchvision.transforms import Lambda
 
 from models import Network
 from train.arg_parser import get_args
-from utils import ModelLoader, make_look_ahead_mask
+from utils import ModelManager, make_look_ahead_mask
 from utils.datasets import CornellMovieDataset, Vocabulary
 
 
@@ -128,7 +128,7 @@ def training_loop(
 
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.PAD_IDX)
 
-    model_loader = ModelLoader(model_name)
+    model_loader = ModelManager(model_name)
 
     if model_loader.checkpoint_exists():
         logger.info("Checkpoint exists, loading save!")
@@ -188,7 +188,10 @@ def training_loop(
             num_correct += T.sum(T.argmax(y, dim=-1) == labels_expected).item()
             num_total += prompts.size(0) * prompts.size(1)
 
-            if batch_idx % checkpoint_interval == 0:
+            if (
+                is_main_process(rank, world_size)
+                and batch_idx % checkpoint_interval == 0
+            ):
                 logger.info("Saving checkpoint...")
                 model_loader.save_checkpoint(
                     network, optimizer, scheduler, scaler, epoch

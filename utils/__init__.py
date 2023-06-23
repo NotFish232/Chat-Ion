@@ -1,2 +1,2 @@
-from .model_loader import ModelLoader
+from .model_manager import ModelManager
 from .utils import *

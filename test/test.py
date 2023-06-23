@@ -4,7 +4,7 @@ import torch as T
 
 from models import Network
 from utils.datasets import Vocabulary
-from utils.model_loader import ModelLoader
+from utils.model_manager import ModelLoader
 
 EMBED_DIM = 512
 
