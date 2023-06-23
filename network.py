@@ -50,7 +50,8 @@ class Network(nn.Module):
         tgt = self.positional_encoding(tgt)
 
         memory_mask = T.triu(
-            T.ones(tgt.size(1), src.size(1), dtype=T.bool), diagonal=1
+            T.ones(tgt.size(1), src.size(1), dtype=T.bool, device=src.device),
+            diagonal=1,
         )
 
         x = self.transformer(src, tgt, memory_mask=memory_mask)
