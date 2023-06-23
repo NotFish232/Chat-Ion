@@ -33,7 +33,7 @@ def main() -> None:
     print(f"{sum(i.numel() for i in network.parameters()):,}")
 
     optimizer = optim.Adam(network.parameters(), LEARNING_RATE)
-    criterion = nn.CrossEntropyLoss(ignore_index=0)
+    criterion = nn.CrossEntropyLoss()
 
     eye = T.eye(dataset.num_words, device=device)
     
