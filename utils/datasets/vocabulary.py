@@ -1,23 +1,20 @@
-from typing_extensions import Self
-from transformers import BertTokenizer
-from nltk import corpus
-from pathlib import Path
+import json
 import string
+from pathlib import Path
 
+from nltk import corpus
+from transformers import BertTokenizer
+from typing_extensions import Self
+
+from . import DATA_DIR
 
 SPECIAL_TOKENS = ["<sos>", "<eos>", "<mask>", "<oov>", "<pad>", "<cls>", "<sep>"]
 
 CORPUS_DICT = {"words": corpus.words, "brown": corpus.brown}
-import json
-
-
-BASE_DIR = Path(__file__).parents[2]
 
 
 class Vocabulary:
-    def __init__(
-        self: Self, corpus_name: str = "words", data_dir: str = "data/vocabulary/"
-    ) -> None:
+    def __init__(self: Self, corpus_name: str = "words") -> None:
         assert (
             corpus_name in CORPUS_DICT
         ), f"Corpus {corpus_name} not found, avaliable corpuses are {CORPUS_DICT.keys()}"
@@ -31,7 +28,7 @@ class Vocabulary:
 
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
 
-        vocab_file_path = BASE_DIR / data_dir / "tokens.json"
+        vocab_file_path = DATA_DIR / "vocabulary/tokens.json"
         if not vocab_file_path.exists():
             tokens = list(set(self.tokenizer.tokenize(" ".join(words))))
             tokens += list(string.punctuation)

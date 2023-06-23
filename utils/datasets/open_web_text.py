@@ -1,14 +1,14 @@
 import io
 import json
-from pathlib import Path
-from typing import Callable, Iterator
-from tqdm import tqdm
 import multiprocessing as mp
 from collections import Counter
-import nltk
+from pathlib import Path
+from typing import Callable, Iterator
 
+import nltk
 import zstandard as zstd
 from torch.utils.data import Dataset
+from tqdm import tqdm
 from typing_extensions import Self
 
 BASE_DIR = Path(__file__).parents[2]

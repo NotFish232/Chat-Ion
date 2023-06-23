@@ -3,10 +3,12 @@ import os
 from collections import Counter
 from string import punctuation
 from typing import Callable, Iterator
-from nltk import word_tokenize
 
+from nltk import word_tokenize
 from torch.utils.data import Dataset
 from typing_extensions import Self
+
+from . import DATA_DIR
 
 
 class CornellMovieDataset(Dataset):
@@ -14,14 +16,13 @@ class CornellMovieDataset(Dataset):
         self: Self,
         file_name: str = "raw.json",
         processed_file_name: str = "processed.txt",
-        data_dir: str = "data/cornell/",
         max_sentence_length: int = 15,
         max_word_length: int = 10,
         min_word_freq: int = 5,
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
-        self.data_dir = data_dir
+        self.data_dir = DATA_DIR / "cornell"
         self.max_sentence_length = max_sentence_length
         self.max_word_length = max_word_length
         self.min_word_freq = min_word_freq
@@ -29,7 +30,7 @@ class CornellMovieDataset(Dataset):
         self.transforms = transforms
         self.target_transforms = target_transforms
 
-        should_process_data = not os.path.isfile(data_dir + processed_file_name)
+        should_process_data = not os.path.isfile(self.data_dir / processed_file_name)
 
         self.conversations = (
             self._process_data(file_name)
@@ -101,7 +102,7 @@ class CornellMovieDataset(Dataset):
 
     def _load_data(self: Self, processed_file_name: str) -> list[tuple[list[str]]]:
         conversations = []
-        with open(f"{self.data_dir}/{processed_file_name}", "r") as f:
+        with open(self.data_dir / processed_file_name, "r") as f:
             for line in f:
                 line = line.strip()
                 question, answer = line.split(" ### ")
@@ -110,7 +111,7 @@ class CornellMovieDataset(Dataset):
 
     def _process_data(self: Self, file_name: str) -> list[tuple[list[str]]]:
         _conversations = {}
-        with open(self.data_dir + file_name, "r") as f:
+        with open(self.data_dir / file_name, "r") as f:
             for line in f:
                 j = json.loads(line)
                 conv_id = j["conversation_id"]
@@ -131,7 +132,7 @@ class CornellMovieDataset(Dataset):
         return conversations
 
     def _save_data(self: Self, processed_file_name: str) -> None:
-        with open(self.data_dir + processed_file_name, "w+") as f:
+        with open(self.data_dir / processed_file_name, "w+") as f:
             for conv in self.conversations:
                 question, answer = conv
                 f.write(f"{' '.join(question)} ### {' '.join(answer)} \n")
