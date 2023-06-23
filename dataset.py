@@ -36,18 +36,20 @@ class ConversationDataset(Dataset):
     def num_words(self: Self):
         return len(self.vocab)
 
+    def tokenize_sentence(self: Self, words: list[str]) -> list[int]:
+        word_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in words]
+        padding = self.max_sentence_length - len(word_idxs)
+        word_idxs.extend(self.PAD_IDX for _ in range(padding))
+
+        return word_idxs
+
     def __len__(self: Self) -> int:
         return len(self.conversations)
 
     def __getitem__(self: Self, idx: int) -> tuple:
         question, answer = self.conversations[idx]
-        question_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in question]
-        answer_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in answer]
-
-        question_padding = self.max_sentence_length - len(question_idxs)
-        answer_padding = self.max_sentence_length - len(answer_idxs)
-        question_idxs.extend(self.PAD_IDX for _ in range(question_padding))
-        answer_idxs.extend(self.PAD_IDX for _ in range(answer_padding))
+        question_idxs = self.tokenize_sentence(question)
+        answer_idxs = self.tokenize_sentence(answer)
 
         if self.transforms is not None:
             question_idxs = self.transforms(question_idxs)
@@ -57,14 +59,14 @@ class ConversationDataset(Dataset):
         return question_idxs, answer_idxs
 
     def _vocab_generator(self: Self) -> Iterator[str]:
+        special_tokens = ["<pad>", "<oov>", "<mask>"]
+        for token in special_tokens:
+            yield token
         for conv in self.conversations:
             question, answer = conv
             for word in question + answer:
                 if len(word) <= self.max_word_length:
                     yield word
-        special_tokens = ["<oov>", "<pad>", "<mask>"]
-        for token in special_tokens:
-            yield token
 
     def _build_vocab(self: Self) -> tuple[dict, dict]:
         counter = Counter(self._vocab_generator()).most_common()
