@@ -1,9 +1,12 @@
 import torch as T
-from torch import amp, nn, optim
+from torch import amp, nn, optim, distributed as dist
 from torch.cuda.amp import GradScaler
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data.distributed import DistributedSampler
 from torchvision.transforms import Lambda
+import torch.multiprocessing as mp
 from tqdm import tqdm
 
 from models import Network
@@ -13,7 +16,18 @@ from utils.datasets import CornellMovieDataset, Vocabulary
 from utils.model_loader import ModelLoader
 
 
+def setup_dist(rank: int, world_size: int) -> None:
+    dist.init_process_group(
+        "gloo",
+        rank=rank,
+        init_method="tcp://localhost:8080",
+        world_size=world_size,
+    )
+
+
 def training_loop(
+    rank: int,
+    world_size: int,
     model_name: str,
     epochs: int,
     batch_size: int,
@@ -23,15 +37,26 @@ def training_loop(
     device: str,
     model_kwargs: dict,
 ) -> None:
-    device = T.device(device)
+    if rank != 0:
+        import os
+        import sys
+
+        f = open(os.devnull, "w")
+        sys.stdout = f
+    device = T.device(f"cuda:{rank}")
 
     transforms = Lambda(lambda x: T.tensor(x, device=device))
 
     vocab = Vocabulary()
     dataset = CornellMovieDataset(transforms=transforms, target_transforms=transforms)
-    dataloader = DataLoader(dataset, batch_size)
+    sampler = DistributedSampler(dataset, world_size, rank)
+    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
 
-    network = Network(len(vocab), **model_kwargs).to(device)
+    network = Network(len(vocab), **model_kwargs)
+    if device.type == "cuda":
+        setup_dist(rank, world_size)
+        network = DDP(network.to(device), device_ids=[rank])
+
     print(f"Parameters: {sum(i.numel() for i in network.parameters()):,}")
 
     optimizer = optim.Adam(
@@ -61,10 +86,6 @@ def training_loop(
         starting_epochs = 0
         starting_accuracy = 0
 
-    look_ahead_mask = make_look_ahead_mask(
-        dataset.max_sentence_length + 1, device=device
-    )
-
     for epoch in range(starting_epochs + 1, starting_epochs + epochs + 1):
         num_correct = 0
         num_total = 0
@@ -75,7 +96,7 @@ def training_loop(
             labels_expected = labels[:, 1:]
 
             masks = {
-                "tgt_mask": look_ahead_mask,
+                "tgt_mask": make_look_ahead_mask(labels_input.size(-1), device),
                 "src_key_padding_mask": prompts == vocab.PAD_IDX,
                 "tgt_key_padding_mask": labels_input == vocab.PAD_IDX,
             }
@@ -114,10 +135,24 @@ def training_loop(
     model_loader.save_model(network)
 
 
+def _training_helper(rank: int, world_size: int, kwargs: dict) -> None:
+    training_loop(rank, world_size, **kwargs)
+
+
 def main() -> None:
     args = get_args()
 
-    training_loop(**args["training"], model_kwargs=args["model"])
+    print(f"Training with arguments: {args['training'] | args['model']}")
+
+    world_size = T.cuda.device_count()
+
+    mp.spawn(
+        _training_helper,
+        args=(world_size, args["training"] | {"model_kwargs": args["model"]}),
+        nprocs=world_size,
+        join=True,
+    )
+    dist.destroy_process_group()
 
 
 if __name__ == "__main__":

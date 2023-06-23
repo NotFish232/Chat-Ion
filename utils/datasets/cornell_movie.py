@@ -77,7 +77,7 @@ class CornellMovieDataset(Dataset):
         if self.transforms is not None:
             question = self.transforms(question)
         if self.target_transforms is not None:
-            question = self.target_transforms(answer)
+            answer = self.target_transforms(answer)
 
         return question, answer
 
