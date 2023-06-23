@@ -49,7 +49,7 @@ class ConversationDataset(Dataset):
         return len(self.vocab)
 
     def tokenize_sentence(
-        self: Self, words: list[str], add_sos: bool = True
+        self: Self, words: list[str], add_sos: bool = False
     ) -> list[int]:
         word_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in words]
         padding = self.max_sentence_length - len(word_idxs)
@@ -65,8 +65,8 @@ class ConversationDataset(Dataset):
 
     def __getitem__(self: Self, idx: int) -> tuple:
         question, answer = self.conversations[idx]
-        question_idxs = self.tokenize_sentence(question, False)
-        answer_idxs = self.tokenize_sentence(answer, True)
+        question_idxs = self.tokenize_sentence(question)
+        answer_idxs = self.tokenize_sentence(answer, add_sos=True)
 
         if self.transforms is not None:
             question_idxs = self.transforms(question_idxs)
