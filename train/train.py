@@ -82,7 +82,7 @@ def main() -> None:
     if accuracy > starting_accuracy:
         print(f"Accuracy improved! ({accuracy:.2%} vs {starting_accuracy:.2%})")
         print("Saving model...")
-        checkpointer.save(network, optimizer, epoch, accuracy)
+        checkpointer.save(network, optimizer, scheduler, epoch, accuracy)
     else:
         print(f"Accuracy decreased. ({accuracy:.2%} vs {starting_accuracy:.2%})")
         print("Not saving model.")
