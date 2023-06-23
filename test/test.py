@@ -4,12 +4,11 @@ from utils.dataset import ConversationDataset
 from utils.checkpointer import CheckPointer
 import warnings
 
-EMBED_DIM = 512
+EMBED_DIM = 256
 
 
 def main():
     warnings.filterwarnings("ignore", category=UserWarning)
-
 
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
     dataset = ConversationDataset()
@@ -42,7 +41,7 @@ def main():
     user_input = ""
     network.eval()
     with T.no_grad():
-        while user_input != "quit":
+        while user_input != "goodbye":
             user_input = input(">> ")
             sentence = dataset.tokenize_sentence(user_input.split(" "))
             sentence = T.tensor(sentence, device=device)
@@ -64,9 +63,12 @@ def main():
                 response = T.argmax(y[0, t - 1])
                 tgt[t] = response
 
+                if response == dataset.EOS_IDX:
+                    break
 
-            response = " ".join(map(lambda x: dataset.rvocab[x.item()], tgt))
-            print(response)
+                print(dataset.rvocab[response.item()], end=" ")
+
+            print()
 
 
 if __name__ == "__main__":
