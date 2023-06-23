@@ -46,25 +46,19 @@ class Network(nn.Module):
             num_decoder_layers=16,
             dim_feedforward=2048,
             activation=F.leaky_relu,
-            dropout=0.25,
+            dropout=0.2,
             batch_first=True,
         )
         self.linear = nn.Linear(embed_dim, num_embed)
 
-    def forward(
-        self: Self,
-        src: T.Tensor,
-        tgt: T.Tensor,
-        src_mask: T.Tensor = None,
-        tgt_mask: T.Tensor = None,
-    ) -> T.Tensor:
+    def forward(self: Self, src: T.Tensor, tgt: T.Tensor, **kwargs) -> T.Tensor:
         src = self.embedding(src) * self.embed_dim_sqrt
         tgt = self.embedding(tgt) * self.embed_dim_sqrt
 
         src = self.positional_encoding(src)
         tgt = self.positional_encoding(tgt)
 
-        x = self.transformer(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask)
+        x = self.transformer(src, tgt, **kwargs)
 
         x = self.linear(x)
 

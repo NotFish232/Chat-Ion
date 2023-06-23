@@ -36,9 +36,10 @@ class ConversationDataset(Dataset):
         )
 
         self.vocab, self.rvocab, self.vocab_count = self._build_vocab()
-        self.PAD_IDX = self.vocab["<pad>"]  
-        self.SOS_IDX = self.vocab["<sos>"]  
-        self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"] 
+        self.PAD_IDX = self.vocab["<pad>"]
+        self.SOS_IDX = self.vocab["<sos>"]
+        self.EOS_IDX = self.vocab["<eos>"]
+        self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"]
 
         if should_process_data:
             self._filter_conversations_by_vocab()
@@ -49,14 +50,16 @@ class ConversationDataset(Dataset):
         return len(self.vocab)
 
     def tokenize_sentence(
-        self: Self, words: list[str], add_sos: bool = False
+        self: Self, words: list[str], add_start_and_end: bool = False
     ) -> list[int]:
         word_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in words]
         padding = self.max_sentence_length - len(word_idxs)
-        word_idxs.extend(self.PAD_IDX for _ in range(padding))
 
-        if add_sos:
+        if add_start_and_end:
             word_idxs.insert(0, self.SOS_IDX)
+            word_idxs.append(self.EOS_IDX)
+
+        word_idxs.extend(self.PAD_IDX for _ in range(padding))
 
         return word_idxs
 
@@ -66,7 +69,7 @@ class ConversationDataset(Dataset):
     def __getitem__(self: Self, idx: int) -> tuple:
         question, answer = self.conversations[idx]
         question_idxs = self.tokenize_sentence(question)
-        answer_idxs = self.tokenize_sentence(answer, add_sos=True)
+        answer_idxs = self.tokenize_sentence(answer, add_start_and_end=True)
 
         if self.transforms is not None:
             question_idxs = self.transforms(question_idxs)
@@ -81,7 +84,7 @@ class ConversationDataset(Dataset):
             for word in question + answer:
                 if len(word) <= self.max_word_length:
                     yield word
-        special_tokens = ["<pad>", "<sos>", "<oov>", "<mask>"]
+        special_tokens = ["<pad>", "<sos>", "<eos>", "<oov>"]
         for token in special_tokens:
             yield token
 

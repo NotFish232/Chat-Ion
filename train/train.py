@@ -10,9 +10,9 @@ from torchvision.transforms import Lambda
 from tqdm import tqdm
 
 BATCH_SIZE = 256
-NUM_EPOCHS = 2
+NUM_EPOCHS = 10
 EMBED_DIM = 512
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-2
 
 
 def main() -> None:
@@ -28,7 +28,7 @@ def main() -> None:
 
     optimizer = optim.Adam(network.parameters(), LEARNING_RATE)
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer)
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(ignore_index=dataset.PAD_IDX)
 
     checkpointer = CheckPointer()
 
@@ -46,12 +46,19 @@ def main() -> None:
         starting_epochs = 0
         starting_accuracy = 0
 
-    eye = T.eye(dataset.num_words, device=device)
-
-    look_ahead_mask = T.triu(
+    src_look_ahead_mask = T.triu(
         T.ones(
             dataset.max_sentence_length,
             dataset.max_sentence_length,
+            dtype=T.bool,
+            device=device,
+        ),
+        diagonal=1,
+    )
+    tgt_look_ahead_mask = T.triu(
+        T.ones(
+            dataset.max_sentence_length + 1,
+            dataset.max_sentence_length + 1,
             dtype=T.bool,
             device=device,
         ),
@@ -65,8 +72,19 @@ def main() -> None:
             labels_input = labels[:, :-1]
             labels_expected = labels[:, 1:]
 
-            y = network(prompts, labels_input, look_ahead_mask, look_ahead_mask)
-            loss = criterion(y, eye[labels_expected])
+            masks = {
+                "src_mask": src_look_ahead_mask,
+                "tgt_mask": tgt_look_ahead_mask,
+                "src_key_padding_mask": prompts == dataset.PAD_IDX,
+                "tgt_key_padding_mask": labels_input == dataset.PAD_IDX,
+            }
+
+            y = network(prompts, labels_input, **masks)
+
+            loss = criterion(
+                y.view(-1, dataset.num_words),
+                labels_expected.flatten(),
+            )
 
             loss.backward()
             optimizer.step()

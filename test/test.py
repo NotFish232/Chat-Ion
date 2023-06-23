@@ -3,7 +3,7 @@ from models.network import Network
 from utils.dataset import ConversationDataset
 from utils.checkpointer import CheckPointer
 
-EMBED_DIM = 256
+EMBED_DIM = 512
 
 
 def main():
@@ -17,10 +17,19 @@ def main():
 
     network.load_state_dict(x["network"])
 
-    look_ahead_mask = T.triu(
+    src_look_ahead_mask = T.triu(
         T.ones(
             dataset.max_sentence_length,
             dataset.max_sentence_length,
+            dtype=T.bool,
+            device=device,
+        ),
+        diagonal=1,
+    )
+    tgt_look_ahead_mask = T.triu(
+        T.ones(
+            dataset.max_sentence_length + 1,
+            dataset.max_sentence_length + 1,
             dtype=T.bool,
             device=device,
         ),
@@ -35,13 +44,23 @@ def main():
             sentence = dataset.tokenize_sentence(user_input.split(" "))
             sentence = T.tensor(sentence, device=device)
 
-            tgt = T.zeros(dataset.max_sentence_length, device=device, dtype=T.int32)
+            tgt = T.full((dataset.max_sentence_length,), dataset.PAD_IDX, device=device)
             tgt[0] = dataset.SOS_IDX
 
             for t in range(1, len(tgt)):
-                y = network(sentence, tgt, look_ahead_mask, look_ahead_mask)
+                masks = {
+                    "src_mask": src_look_ahead_mask,
+                    "tgt_mask": tgt_look_ahead_mask,
+                    "src_key_padding_mask": sentence == dataset.PAD_IDX,
+                    "tgt_key_padding_mask": tgt == dataset.PAD_IDX,
+                }
+                y = network(sentence, tgt, **masks)
+                
                 response = T.argmax(y[0, t - 1])
                 tgt[t] = response
+
+                if response == dataset.EOS_IDX:
+                    break
 
             response = " ".join(map(lambda x: dataset.rvocab[x.item()], tgt))
             print(response)
