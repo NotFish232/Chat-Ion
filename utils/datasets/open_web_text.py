@@ -47,7 +47,7 @@ class OpenWebTextDataset(Dataset):
         folder_name: str = "openwebtext2",
         unprocessed_folder_name: str = "unprocessed",
         processed_folder_name: str = "processed",
-        num_processed_files: int = 128,
+        num_processed_files: int = 6,
         info_file_name: str = "info.json",
         max_sentence_length: int = 64,
         max_passage_length: int = 256,
@@ -172,7 +172,7 @@ class OpenWebTextDataset(Dataset):
 
         return input, target
 
-    def _get_passage(self: Self, sentence_generator: Iterator) -> list[str]:
+    def _get_passage(self: Self, sentence_generator: Iterator[str]) -> list[str]:
         passage = []
         while True:
             line = next(sentence_generator)

@@ -14,8 +14,8 @@ from torchvision.transforms import Lambda
 
 from models import Network
 from train.arg_parser import get_args
-from utils import ModelManager, make_look_ahead_mask
-from utils.datasets import CornellMovieDataset, Vocabulary
+from utils import ModelManager, make_look_ahead_mask, Vocabulary, InterleavedSampler
+from utils.datasets import CornellMovieDataset
 
 
 def setup_distributed(rank: int = -1, world_size: int = -1) -> None:
@@ -52,7 +52,7 @@ def prepare_dataloader(
         target_transforms=target_transforms,
     )
     sampler = (
-        DistributedSampler(dataset, world_size, rank)
+        InterleavedSampler(len(dataset), rank, world_size)
         if rank != -1 and world_size != -1
         else None
     )
