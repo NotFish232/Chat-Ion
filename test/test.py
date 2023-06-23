@@ -1,5 +1,5 @@
 import torch as T
-from network import Network
+from models.network import Network
 from dataset import ConversationDataset
 
 EMBED_DIM = 512
@@ -10,7 +10,7 @@ def main():
     dataset = ConversationDataset()
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)
-    network.load_state_dict(T.load("trained_model.pt"))
+    network.load_state_dict(T.load("../models/trained_model.pt"))
 
     look_ahead_mask = T.triu(
         T.ones(

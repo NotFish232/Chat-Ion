@@ -1,4 +1,3 @@
-trained_model.pt
 *.pyc
 venv/
 testing.py
