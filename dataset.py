@@ -36,11 +36,11 @@ class ConversationDataset(Dataset):
         )
 
         self.vocab, self.rvocab, self.vocab_count = self._build_vocab()
-        self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"]
-        self.PAD_IDX = self.vocab["<pad>"]
+        self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"] # 0
+        self.PAD_IDX = self.vocab["<pad>"] # 1
 
         if should_process_data:
-            self.conversations = self._filter_conversations_by_vocab()
+            self._filter_conversations_by_vocab()
             self._save_data(processed_file_name)
 
     @property
@@ -126,7 +126,7 @@ class ConversationDataset(Dataset):
                 question, answer = conv
                 f.write(f"{' '.join(question)} ### {' '.join(answer)} \n")
 
-    def _filter_conversations_by_vocab(self: Self) -> list[tuple[str, str]]:
+    def _filter_conversations_by_vocab(self: Self) -> None:
         new_conversations = []
         for conv in self.conversations:
             question, answer = conv
@@ -135,7 +135,11 @@ class ConversationDataset(Dataset):
                 for w in " ".join(question + answer).split(" ")
             ):
                 new_conversations.append(conv)
-        return new_conversations
+
+        self.conversations = new_conversations
+
+        # in order to not mess up idxs in training (i.e. different idxs when loading 1st / 2nd time)
+        self.vocab, self.rvocab, self.vocab_count = self._build_vocab()
 
 
 def main() -> None:
