@@ -14,7 +14,7 @@ CORPUS_DICT = {"words": corpus.words, "brown": corpus.brown}
 
 
 class Vocabulary:
-    def __init__(self: Self, corpus_name: str = "words") -> None:
+    def __init__(self: Self, corpus_name: str = "words", folder_name: str = "vocabulary") -> None:
         assert (
             corpus_name in CORPUS_DICT
         ), f"Corpus {corpus_name} not found, avaliable corpuses are {CORPUS_DICT.keys()}"
@@ -28,7 +28,7 @@ class Vocabulary:
 
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
 
-        vocab_file_path = DATA_DIR / "vocabulary/tokens.json"
+        vocab_file_path = DATA_DIR / folder_name / "tokens.json"
         if not vocab_file_path.exists():
             tokens = list(set(self.tokenizer.tokenize(" ".join(words))))
             tokens += list(string.punctuation)

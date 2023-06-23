@@ -14,7 +14,8 @@ from . import DATA_DIR
 class CornellMovieDataset(Dataset):
     def __init__(
         self: Self,
-        file_name: str = "raw.json",
+        folder_name: str = "cornell",
+        unprocessed_file_name: str = "raw.json",
         processed_file_name: str = "processed.txt",
         max_sentence_length: int = 15,
         max_word_length: int = 10,
@@ -22,7 +23,10 @@ class CornellMovieDataset(Dataset):
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
-        self.data_dir = DATA_DIR / "cornell"
+        self.data_dir = DATA_DIR / folder_name
+        self.unprocessed_file_name = unprocessed_file_name
+        self.processed_file_name = processed_file_name
+
         self.max_sentence_length = max_sentence_length
         self.max_word_length = max_word_length
         self.min_word_freq = min_word_freq
@@ -33,9 +37,9 @@ class CornellMovieDataset(Dataset):
         should_process_data = not os.path.isfile(self.data_dir / processed_file_name)
 
         self.conversations = (
-            self._process_data(file_name)
+            self._process_data()
             if should_process_data
-            else self._load_data(processed_file_name)
+            else self._load_data()
         )
 
         self.vocab, self.rvocab, self.vocab_count = self._build_vocab()
@@ -109,9 +113,9 @@ class CornellMovieDataset(Dataset):
                 conversations.append((question.split(" "), answer.split(" ")))
         return conversations
 
-    def _process_data(self: Self, file_name: str) -> list[tuple[list[str]]]:
+    def _process_data(self: Self) -> list[tuple[list[str]]]:
         _conversations = {}
-        with open(self.data_dir / file_name, "r") as f:
+        with open(self.data_dir / self.processed_file_name, "r") as f:
             for line in f:
                 j = json.loads(line)
                 conv_id = j["conversation_id"]
@@ -131,8 +135,8 @@ class CornellMovieDataset(Dataset):
 
         return conversations
 
-    def _save_data(self: Self, processed_file_name: str) -> None:
-        with open(self.data_dir / processed_file_name, "w+") as f:
+    def _save_data(self: Self) -> None:
+        with open(self.data_dir / self.processed_file_name, "w+") as f:
             for conv in self.conversations:
                 question, answer = conv
                 f.write(f"{' '.join(question)} ### {' '.join(answer)} \n")
