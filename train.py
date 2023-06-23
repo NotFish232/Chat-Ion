@@ -7,9 +7,9 @@ from torchvision.transforms import Compose, Lambda
 from tqdm import tqdm
 
 BATCH_SIZE = 256
-NUM_EPOCHS = 50
-EMBED_DIM = 256
-LEARNING_RATE = 1e-4
+NUM_EPOCHS = 4
+EMBED_DIM = 512
+LEARNING_RATE = 1e-7
 
 
 def main() -> None:
@@ -36,16 +36,7 @@ def main() -> None:
     criterion = nn.CrossEntropyLoss()
 
     eye = T.eye(dataset.num_words, device=device)
-
-    memory_mask = T.triu(
-        T.ones(
-            dataset.max_sentence_length,
-            dataset.max_sentence_length,
-            dtype=T.bool,
-            device=device,
-        ),
-        diagonal=1,
-    )
+    
 
     for epoch in range(1, NUM_EPOCHS + 1):
         num_correct = 0
@@ -54,7 +45,7 @@ def main() -> None:
             labels_input = labels[:, :-1]
             labels_expected = labels[:, 1:]
 
-            y = network(prompt, labels_input, memory_mask)
+            y = network(prompt, labels_input)
             loss = criterion(y, eye[labels_expected])
 
             loss.backward()

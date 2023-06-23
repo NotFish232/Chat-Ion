@@ -2,7 +2,7 @@ import torch as T
 from network import Network
 from dataset import ConversationDataset
 
-EMBED_DIM = 256
+EMBED_DIM = 512
 
 
 def main():
@@ -11,16 +11,6 @@ def main():
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)
     network.load_state_dict(T.load("trained_model.pt"))
-
-    memory_mask = T.triu(
-        T.ones(
-            dataset.max_sentence_length,
-            dataset.max_sentence_length,
-            dtype=T.bool,
-            device=device,
-        ),
-        diagonal=1,
-    )
 
     user_input = ""
     network.eval()
@@ -34,7 +24,7 @@ def main():
             tgt[0] = dataset.SOS_IDX
 
             for t in range(1, len(tgt)):
-                y = network(sentence, tgt, memory_mask)
+                y = network(sentence, tgt)
                 response = T.argmax(y[0, t - 1])
                 tgt[t] = response
 

@@ -39,11 +39,34 @@ class Network(nn.Module):
 
         self.embedding = nn.Embedding(num_embed, embed_dim)
         self.positional_encoding = PositionalEncoding(num_embed, embed_dim)
-        self.transformer = nn.Transformer(embed_dim, nhead=4, batch_first=True)
+        self.transformer = nn.Transformer(
+            embed_dim,
+            num_encoder_layers=10,
+            num_decoder_layers=10,
+            activation=F.leaky_relu,
+            batch_first=True,
+        )
         self.linear = nn.Linear(embed_dim, num_embed)
 
+        self.register_buffer(
+            "default_mask",
+            T.triu(
+                T.ones(
+                    (15, 15),
+                    dtype=T.bool,
+                ),
+                diagonal=1,
+            ),
+            persistent=False,
+        )
+
     def forward(
-        self: Self, src: T.Tensor, tgt: T.Tensor, mask: T.Tensor = None
+        self: Self,
+        src: T.Tensor,
+        tgt: T.Tensor,
+        *,
+        src_mask: T.Tensor = None,
+        tgt_mask: T.Tensor = None,
     ) -> T.Tensor:
         src = self.embedding(src) * self.embed_dim_sqrt
         tgt = self.embedding(tgt) * self.embed_dim_sqrt
@@ -51,7 +74,10 @@ class Network(nn.Module):
         src = self.positional_encoding(src)
         tgt = self.positional_encoding(tgt)
 
-        x = self.transformer(src, tgt, memory_mask=mask)
+        src_mask = (src_mask or self.default_mask).to(T.bool)
+        tgt_mask = (tgt_mask or self.default_mask).to(T.bool)
+
+        x = self.transformer(src, tgt, src_mask=src_mask, tgt_mask=tgt_mask)
 
         x = self.linear(x)
 
