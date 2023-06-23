@@ -2,7 +2,7 @@ import io
 import json
 import multiprocessing as mp
 from typing import Callable, Iterator
-from . import DATA_DIR
+from .shared import DATA_DIR
 from enum import Enum
 
 

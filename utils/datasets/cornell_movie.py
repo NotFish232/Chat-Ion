@@ -8,7 +8,7 @@ from nltk import word_tokenize
 from torch.utils.data import Dataset
 from typing_extensions import Self
 
-from . import DATA_DIR
+from .shared import DATA_DIR
 
 
 class CornellMovieDataset(Dataset):
@@ -104,9 +104,9 @@ class CornellMovieDataset(Dataset):
             vocab_count[el] = count
         return vocab, rvocab, vocab_count
 
-    def _load_data(self: Self, processed_file_name: str) -> list[tuple[list[str]]]:
+    def _load_data(self: Self) -> list[tuple[list[str]]]:
         conversations = []
-        with open(self.data_dir / processed_file_name, "r") as f:
+        with open(self.data_dir / self.processed_file_name, "r") as f:
             for line in f:
                 line = line.strip()
                 question, answer = line.split(" ### ")
