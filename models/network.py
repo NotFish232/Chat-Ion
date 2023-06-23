@@ -6,19 +6,19 @@ import math
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self: Self, num_embed: int, embed_dim: int) -> None:
+    def __init__(self: Self, max_seq_len: int, embed_dim: int) -> None:
         super().__init__()
 
         assert embed_dim % 2 == 0, "Size of embeddings must be an even number"
-        self.num_embed = num_embed
+        self.max_seq_len = max_seq_len
         self.embed_dim = embed_dim
 
-        encoding = T.zeros((num_embed, embed_dim))
-        positions = T.arange(num_embed).unsqueeze(1).repeat(1, embed_dim // 2)
+        encoding = T.zeros((max_seq_len, embed_dim))
+        positions = T.arange(max_seq_len).unsqueeze(1).repeat(1, embed_dim // 2)
         div_terms = (
             (10_000 ** (T.arange(0, embed_dim, 2) / embed_dim))
             .unsqueeze(0)
-            .repeat_interleave(num_embed, 0)
+            .repeat_interleave(max_seq_len, 0)
         )
         encoding[:, 0::2] = T.sin(positions / div_terms)
         encoding[:, 1::2] = T.cos(positions / div_terms)
@@ -38,15 +38,15 @@ class Network(nn.Module):
         self.embed_dim_sqrt = math.sqrt(embed_dim)
 
         self.embedding = nn.Embedding(num_embed, embed_dim)
-        self.positional_encoding = PositionalEncoding(num_embed, embed_dim)
+        self.positional_encoding = PositionalEncoding(16, embed_dim)
         self.transformer = nn.Transformer(
             embed_dim,
             nhead=4,
-            num_encoder_layers=16,
-            num_decoder_layers=16,
+            num_encoder_layers=8,
+            num_decoder_layers=8,
             dim_feedforward=2048,
             activation=F.leaky_relu,
-            dropout=0.2,
+            dropout=0.25,
             batch_first=True,
         )
         self.linear = nn.Linear(embed_dim, num_embed)

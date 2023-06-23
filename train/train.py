@@ -12,7 +12,7 @@ from tqdm import tqdm
 BATCH_SIZE = 256
 NUM_EPOCHS = 10
 EMBED_DIM = 512
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 1e-5
 
 
 def main() -> None:
@@ -32,9 +32,9 @@ def main() -> None:
 
     checkpointer = CheckPointer()
 
-    if checkpointer.exists():
+    if checkpointer.checkpoint_exists():
         print("Checkpoint exists, loading save!")
-        x = checkpointer.load()
+        x = checkpointer.load_checkpoint()
         network.load_state_dict(x["network"])
         optimizer.load_state_dict(x["optimizer"])
         scheduler.load_state_dict(x["scheduler"])
@@ -68,6 +68,8 @@ def main() -> None:
     for epoch in range(starting_epochs + 1, starting_epochs + NUM_EPOCHS + 1):
         num_correct = 0
         num_total = 0
+        total_loss = 0
+
         for prompts, labels in tqdm(dataloader, desc=f"Epoch {epoch}"):
             labels_input = labels[:, :-1]
             labels_expected = labels[:, 1:]
@@ -85,25 +87,29 @@ def main() -> None:
                 y.view(-1, dataset.num_words),
                 labels_expected.flatten(),
             )
+            
+            total_loss += loss.item()
 
             loss.backward()
             optimizer.step()
-            scheduler.step(loss)
             optimizer.zero_grad()
 
             num_correct += T.sum(T.argmax(y, dim=-1) == labels_expected).item()
             num_total += prompts.size(0) * dataset.max_sentence_length
+
+        avg_loss = total_loss / len(dataloader)
+        scheduler.step(avg_loss)
 
         accuracy = num_correct / num_total
         print(f"Accuracy: {accuracy:.2%}")
 
     if accuracy > starting_accuracy:
         print(f"Accuracy improved! ({accuracy:.2%} vs {starting_accuracy:.2%})")
-        print("Saving model...")
+        print("Saving checkpoint...")
         checkpointer.save(network, optimizer, scheduler, epoch, accuracy)
     else:
         print(f"Accuracy decreased. ({accuracy:.2%} vs {starting_accuracy:.2%})")
-        print("Not saving model.")
+        print("Not saving checkpoint.")
 
 
 if __name__ == "__main__":

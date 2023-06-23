@@ -2,20 +2,23 @@ import torch as T
 from models.network import Network
 from utils.dataset import ConversationDataset
 from utils.checkpointer import CheckPointer
+import warnings
 
 EMBED_DIM = 512
 
 
 def main():
+    warnings.filterwarnings("ignore", category=UserWarning)
+
+
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
     dataset = ConversationDataset()
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)
 
     checkpointer = CheckPointer()
-    x = checkpointer.load()
 
-    network.load_state_dict(x["network"])
+    network.load_state_dict(checkpointer.load_model())
 
     src_look_ahead_mask = T.triu(
         T.ones(
@@ -44,7 +47,9 @@ def main():
             sentence = dataset.tokenize_sentence(user_input.split(" "))
             sentence = T.tensor(sentence, device=device)
 
-            tgt = T.full((dataset.max_sentence_length,), dataset.PAD_IDX, device=device)
+            tgt = T.full(
+                (dataset.max_sentence_length + 1,), dataset.PAD_IDX, device=device
+            )
             tgt[0] = dataset.SOS_IDX
 
             for t in range(1, len(tgt)):
@@ -55,12 +60,10 @@ def main():
                     "tgt_key_padding_mask": tgt == dataset.PAD_IDX,
                 }
                 y = network(sentence, tgt, **masks)
-                
+
                 response = T.argmax(y[0, t - 1])
                 tgt[t] = response
 
-                if response == dataset.EOS_IDX:
-                    break
 
             response = " ".join(map(lambda x: dataset.rvocab[x.item()], tgt))
             print(response)
