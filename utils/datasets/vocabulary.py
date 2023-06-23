@@ -1,8 +1,10 @@
 import json
 import string
+
 from nltk import corpus
 from transformers import BertTokenizer
 from typing_extensions import Self
+
 from .shared import DATA_DIR
 
 SPECIAL_TOKENS = ["<sos>", "<eos>", "<mask>", "<oov>", "<pad>", "<cls>", "<sep>"]
@@ -60,7 +62,7 @@ class Vocabulary:
         if to_idxs:
             tokens = [self.token_to_idx.get(t, self.OOV_IDX) for t in tokens]
         return tokens
-    
+
     def __len__(self: Self) -> int:
         return len(self.token_to_idx)
 

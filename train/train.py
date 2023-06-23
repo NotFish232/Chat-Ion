@@ -1,16 +1,16 @@
 import torch as T
-from torch import nn, optim, amp
+from torch import amp, nn, optim
+from torch.cuda.amp import GradScaler
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
 from torchvision.transforms import Lambda
 from tqdm import tqdm
-from torch.cuda.amp import GradScaler
 
 from models import Network
 from train.arg_parser import get_args
+from utils import make_look_ahead_mask
 from utils.datasets import CornellMovieDataset, Vocabulary
 from utils.model_loader import ModelLoader
-from utils import make_look_ahead_mask
 
 
 def training_loop(

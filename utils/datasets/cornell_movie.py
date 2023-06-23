@@ -1,7 +1,9 @@
 import json
 from typing import Callable
+
 from torch.utils.data import Dataset
 from typing_extensions import Self
+
 from .shared import DATA_DIR
 from .vocabulary import Vocabulary
 
