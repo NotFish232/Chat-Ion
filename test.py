@@ -22,7 +22,7 @@ def main():
         tgt[0] = 1
         with T.no_grad():
             for t in range(1, len(tgt)):
-                y = T.argmax(network(sentence), dim=-1)[0]
+                y = T.argmax(network(sentence, tgt), dim=-1)[0]
                 tgt[t] = y[t - 1]
         response = " ".join(map(lambda x: dataset.rvocab[x.item()], tgt))
         print(response)
