@@ -36,14 +36,17 @@ def main() -> None:
     criterion = nn.CrossEntropyLoss()
 
     eye = T.eye(dataset.num_words, device=device)
-
+    
     for epoch in range(1, NUM_EPOCHS + 1):
+        acc_loss = 0
         for prompt, labels in tqdm(dataloader, desc=f"Epoch {epoch}"):
             y = network(prompt, labels)
             loss = criterion(y, eye[labels])
+            acc_loss += loss.detach()
             loss.backward()
             optimizer.step()
-        print()
+            optimizer.zero_grad()
+        print(f"Loss {acc_loss:.2f}")
     T.save(network.state_dict(), "trained_model.pt")
 
 
