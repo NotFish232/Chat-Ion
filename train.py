@@ -7,7 +7,7 @@ from torchvision.transforms import Compose, Lambda
 from tqdm import tqdm
 
 BATCH_SIZE = 256
-NUM_EPOCHS = 1
+NUM_EPOCHS = 10
 EMBED_DIM = 256
 LEARNING_RATE = 1e-3
 
