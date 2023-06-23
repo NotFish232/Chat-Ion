@@ -3,7 +3,7 @@ import warnings
 import torch as T
 
 from models import Network
-from utils.dataset import CornellMovieDataset
+from utils.datasets import Vocabulary
 from utils.model_loader import ModelLoader
 
 EMBED_DIM = 512
@@ -13,7 +13,7 @@ def main():
     warnings.filterwarnings("ignore", category=UserWarning)
 
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
-    dataset = CornellMovieDataset()
+    v = Vocabulary()
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)
 

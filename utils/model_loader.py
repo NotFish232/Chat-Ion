@@ -13,11 +13,15 @@ class ModelLoader:
     def __init__(
         self: Self,
         model_name: str,
+        model_kwargs: dict,
+        save_keys: list[str],
         checkpoint_dir: str = "checkpoints",
         model_dir: str = "trained_models",
         preserve_old: bool = True,
     ) -> None:
         self.model_name = model_name
+        self.model_kwargs = model_kwargs
+        self.save_keys = save_keys
         self.checkpoint_dir = BASE_DIR / checkpoint_dir
         self.model_dir = BASE_DIR / model_dir
         self.preserve_old = preserve_old
@@ -53,8 +57,7 @@ class ModelLoader:
         optimizer: optim.Optimizer,
         scheduler: lr_scheduler.LRScheduler,
         scaler: amp.GradScaler,
-        epochs: int,
-        accuracy: float,
+        epochs: int
     ) -> None:
         if not self.preserve_old:
             for file in self.checkpoint_dir.glob("*.pt"):
@@ -67,9 +70,8 @@ class ModelLoader:
                 "scheduler": scheduler.state_dict(),
                 "scaler": scaler.state_dict(),
                 "epochs": epochs,
-                "accuracy": accuracy,
             },
-            self.checkpoint_dir / f"checkpoint-{epochs}-{100 * accuracy:05.2f}.pt",
+            self.checkpoint_dir / f"checkpoint-{epochs}.pt",
         )
 
     def save_model(self: Self, network: nn.Module) -> None:

@@ -45,9 +45,9 @@ class OpenWebTextDataset(Dataset):
         self: Self,
         mode: Modes | str,
         folder_name: str = "openwebtext2",
-        unprocessed_file_dir: str = "unprocessed",
+        unprocessed_folder_name: str = "unprocessed",
         processed_folder_name: str = "processed",
-        num_processed_files: int = 6,
+        num_processed_files: int = 128,
         info_file_name: str = "info.json",
         max_sentence_length: int = 64,
         max_passage_length: int = 256,
@@ -63,7 +63,7 @@ class OpenWebTextDataset(Dataset):
         self.mode = mode
 
         self.data_dir = DATA_DIR / folder_name
-        self.unprocessed_file_dir = unprocessed_file_dir
+        self.unprocessed_folder_name = unprocessed_folder_name
         self.processed_folder_name = processed_folder_name
         self.num_processed_files = num_processed_files
         self.info_file_name = info_file_name
@@ -76,28 +76,27 @@ class OpenWebTextDataset(Dataset):
 
         self.vocab = Vocabulary()
 
-        self.files = list((self.data_dir / unprocessed_file_dir).glob("*.jsonl.zst"))
+        self.unprocessed_files = list(
+            (self.data_dir / unprocessed_folder_name).glob("*.jsonl.zst")
+        )
 
         if not (self.data_dir / self.info_file_name).exists():
             self._process_data()
 
+        self.processed_files = list(
+            (self.data_dir / processed_folder_name).glob("*.zst")
+        )
+
         self.num_passages, self.num_sentences = self._read_info_file()
 
-        self.current_idx = 0
+        self.current_idxs = [0 for _ in range(num_processed_files)]
 
-        sentence_iterator = self._read_jsonl(self.data_dir / processed_file_name)
-        self.sentence_gen = itertools.cycle(sentence_iterator)
-
-        # necessry bc apparently you cant prev an iter
-        if self.mode == Modes.SentToSent:
-            self.previous_sentence = next(self.sentence_gen)
+        self.sentence_generators = [
+            itertools.cycle(self._read_jsonl(f)) for f in self.processed_files
+        ]
 
     def __len__(self: Self) -> int:
-        return (
-            self.num_sentences - self.num_passages
-            if self.mode == Modes.SentToSent
-            else self.num_passages
-        )
+        return self.num_passages
 
     """
     supports arbitrary indexing, but in reality if you are using 
@@ -106,170 +105,100 @@ class OpenWebTextDataset(Dataset):
     arbitrary index in the dataset
     """
 
-    def __getitem__(self: Self, idx: int) -> tuple:
-        while self.current_idx != idx:
-            line = next(self.sentence_gen)
+    def __getitem__(self: Self, _idx: int) -> tuple:
+        bucket_idx = _idx % self.num_processed_files
+        sentence_generator = self.sentence_generators[bucket_idx]
+        idx = _idx // self.num_processed_files
 
-            if self.mode == Modes.SentToSent:
-                if line != PASSAGE_END:
-                    self.current_idx += 1
-                    self.previous_sentence = line
-                else:
-                    self.previous_sentence = None
-            else:
-                if line == PASSAGE_END:
-                    self.current_idx += 1
+        while self.current_idxs[bucket_idx] != idx:
+            line = next(sentence_generator)
 
-            if self.current_idx == len(self):
-                self.current_idx = 0
+            if line == PASSAGE_END:
+                self.current_idxs[bucket_idx] += 1
+
+            if self.current_idxs[bucket_idx] == self.__len__():
+                self.current_idxs[bucket_idx] = 0
+
+        passage = self._get_passage(sentence_generator)
+        self.current_idxs[bucket_idx] += 1
+        if self.current_idxs[bucket_idx] == self.__len__():
+            self.current_idxs[bucket_idx] = 0
 
         input, target = (
-            self._make_sent_to_sent_task()
+            (passage[0], passage[1])
             if self.mode == Modes.SentToSent
-            else self._make_sent_to_pass_task()
+            else (passage[0], passage[1:])
             if self.mode == Modes.SentToPass
-            else self._make_pass_to_sent_task()
+            else (passage[:-1], passage[-1])
             if self.mode == Modes.PassToSent
-            else self._make_pass_to_pass_task()
+            else (passage[: len(passage) // 2], passage[len(passage) // 2 :])
             if self.mode == Modes.PassToPass
-            else self._make_masking_task()
-            if self.mode == Modes.Masking
+            else (passage, passage)
+            if Modes.Masking
             else (None, None)
         )
 
-        self.current_idx += 1
-        if self.current_idx == len(self):
-            self.current_idx = 0
+        input = self.vocab.tokenize(input)
+        target = self.vocab.tokenize(target)
+
+        input = self._pad_tokens(input, False)
+        target = self._pad_tokens(target)
+
+        if self.mode == Modes.Masking:
+            input, target = self._mask(input, target)
 
         if self.transforms is not None:
             input = self.transforms(input)
-        if self.target_transforms is not None:
+        if self.transforms is not None:
             target = self.target_transforms(target)
 
         return input, target
 
-    def _make_sent_to_sent_task(self: Self) -> tuple[list[int], list[int]]:
-        input = self.previous_sentence
-        target = next(self.sentence_gen)
-        if target == PASSAGE_END:
-            input = next(self.sentence_gen)
-            target = next(self.sentence_gen)
-        self.previous_sentence = target
-
-        input = self.vocab.tokenize(input)
-        target = self.vocab.tokenize(target)
-
-        input = self._pad_tokens(input, self.max_sentence_length, True)
-        target = self._pad_tokens(
-            target, self.max_sentence_length, add_sos_and_eos=True
-        )
-
-        return input, target
-
-    def _make_sent_to_pass_task(self: Self) -> tuple[list[int], list[int]]:
-        input = next(self.sentence_gen)
-        target = ""
-
-        while True:
-            line = next(self.sentence_gen)
-            if line == PASSAGE_END:
+    def _mask(
+        self: Self, input: list[str], target: list[str]
+    ) -> tuple[list[int], list[int]]:
+        for idx in range(len(input)):
+            if input[idx] == self.vocab.PAD_IDX:
                 break
-            target += line
 
-        input = self.vocab.tokenize(input)
-        target = self.vocab.tokenize(target)
-
-        input = self._pad_tokens(input, self.max_sentence_length, True)
-        target = self._pad_tokens(target, self.max_passage_length, add_sos_and_eos=True)
-
-        return input, target
-
-    def _make_pass_to_sent_task(self: Self) -> tuple[list[int], list[int]]:
-        sentences = []
-
-        while True:
-            line = next(self.sentence_gen)
-            if line == PASSAGE_END:
-                break
-            sentences.append(line)
-
-        input = "".join(sentences[:-1])
-        target = sentences[-1]
-
-        input = self.vocab.tokenize(input)
-        target = self.vocab.tokenize(target)
-
-        input = self._pad_tokens(input, self.max_passage_length, True)
-        target = self._pad_tokens(
-            target, self.max_sentence_length, add_sos_and_eos=True
-        )
-
-        return input, target
-
-    def _make_pass_to_pass_task(self: Self) -> tuple[list[int], list[int]]:
-        sentences = []
-
-        while True:
-            line = next(self.sentence_gen)
-            if line == PASSAGE_END:
-                break
-            sentences.append(line)
-
-        middle = len(sentences) // 2 + 1
-
-        input = "".join(sentences[:middle])
-        target = "".join(sentences[middle:])
-
-        input = self.vocab.tokenize(input)
-        target = self.vocab.tokenize(target)
-
-        input = self._pad_tokens(input, self.max_passage_length, True)
-        target = self._pad_tokens(target, self.max_passage_length, add_sos_and_eos=True)
-
-        return input, target
-
-    def _make_masking_task(self: Self) -> tuple[list[int], list[int]]:
-        passage = ""
-        while True:
-            line = next(self.sentence_gen)
-            if line == PASSAGE_END:
-                break
-            passage += line
-
-        tokens = self.vocab.tokenize(passage)
-        tokens = self._pad_tokens(tokens, self.max_passage_length, add_sos_and_eos=True)
-        input, target = [], []
-        for token in tokens:
             if random.random() <= MASKING_PROB:
                 prob = random.random()
-                if prob < ACTUAL_WORD_PROB:
-                    input.append(token)
-                elif prob < ACTUAL_WORD_PROB + RANDOM_WORD_PROB:
-                    input.append(random.randint(0, self.vocab.num_reg_tokens - 1))
-                else:
-                    input.append(self.vocab.MASK_IDX)
-                target.append(token)
+                if prob < RANDOM_WORD_PROB:
+                    input[idx] = random.randint(0, self.vocab.num_reg_tokens - 1)
+                elif prob < 1 - ACTUAL_WORD_PROB:
+                    input[idx] = self.vocab.MASK_IDX
             else:
-                input.append(token)
-                target.append(self.vocab.PAD_IDX)
+                target[idx] = self.vocab.PAD_IDX
 
         return input, target
 
-    def _pad_tokens(
-        self: Self,
-        tokens: list[int],
-        n: int,
-        trim_left: bool = False,
-        add_sos_and_eos: bool = False,
-    ) -> list[int]:
-        if add_sos_and_eos:
+    def _get_passage(self: Self, sentence_generator: Iterator) -> list[str]:
+        passage = []
+        while True:
+            line = next(sentence_generator)
+            if line == PASSAGE_END:
+                break
+            passage.append(line)
+        return passage
+
+    def _pad_tokens(self: Self, tokens: list[int], is_target: bool = True) -> list[int]:
+        n = (
+            self.max_sentence_length
+            if self.mode == Modes.SentToSent
+            or (not is_target and self.mode == Modes.PassToSent)
+            or (is_target and self.mode == Modes.SentToPass)
+            else self.max_sentence_length
+        )
+
+        if is_target:
             n -= 1
+
         if len(tokens) > n:
-            tokens = tokens[-n:] if trim_left else tokens[:n]
+            tokens = tokens[-n:] if not is_target else tokens[:n]
 
         num_pads = n - len(tokens)
 
-        if add_sos_and_eos:
+        if is_target:
             tokens.insert(0, self.vocab.SOS_IDX)
             tokens.append(self.vocab.EOS_IDX)
 
@@ -305,9 +234,11 @@ class OpenWebTextDataset(Dataset):
         compressor = zstd.ZstdCompressor()
 
         with mp.Pool(num_processes) as p:
-            m = p.imap(self._process_file, self.files)
+            m = p.imap(self._process_file, self.unprocessed_files)
 
-            for r in tqdm(m, total=len(self.files), desc="reading unprocessed..."):
+            for r in tqdm(
+                m, total=len(self.unprocessed_files), desc="reading unprocessed..."
+            ):
                 passages.extend(r)
 
         num = len(passages) // self.num_processed_files
@@ -340,10 +271,14 @@ class OpenWebTextDataset(Dataset):
         with open(self.data_dir / self.info_file_name, "r") as f:
             data = json.load(f)
 
-        num_passages = data["num_passages"]
-        num_sentences = data["num_sentences"]
+        total_passages = 0
+        total_sentences = 0
 
-        return num_passages, num_sentences
+        for d in data:
+            total_passages += d["num_passages"]
+            total_sentences += d["num_sentences"]
+
+        return total_passages, total_sentences
 
 
 if __name__ == "__main__":
