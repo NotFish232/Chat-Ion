@@ -13,7 +13,7 @@ class CornellMovieDataset(Dataset):
         self: Self,
         file_name: str = "raw.json",
         processed_file_name: str = "processed.txt",
-        data_dir: str = "data/cornell",
+        data_dir: str = "data/cornell/",
         max_sentence_length: int = 15,
         max_word_length: int = 10,
         min_word_freq: int = 5,
