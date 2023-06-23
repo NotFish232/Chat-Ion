@@ -20,7 +20,9 @@ POSSIBLE_MODES = [
     "paragraph_to_paragraph",
 ]
 
-SPECIAL_TOKENS = ["<eos>","<sos>", "<pad>", "<mask>", "<oov>"]
+SPECIAL_TOKENS = ["<eos>", "<sos>", "<pad>", "<mask>", "<oov>"]
+
+PASSAGE_END = "### PASSAGE END ###"
 
 
 class OpenWebTextDataset(Dataset):
@@ -32,6 +34,7 @@ class OpenWebTextDataset(Dataset):
         target_transforms: Callable = None,
     ) -> None:
         assert mode in POSSIBLE_MODES
+
         self.mode = mode
         self.data_dir = BASE_DIR / data_dir
         self.transforms = transforms
@@ -43,16 +46,13 @@ class OpenWebTextDataset(Dataset):
 
         self.num_passages, self.num_sentences = self._read_info_file()
 
-        self.vocab, self.rvocab = self._build_vocab()
+        self.current_idx = 0
 
-        self.EOS_IDX = self.vocab["<eos>"]
-        self.SOS_IDX = self.vocab["<sos>"]
-        self.PAD_IDX = self.vocab["<pad>"]
-        self.MASK_IDX = self.vocab["<mask>"]
-        self.OOV_IDX = self.vocab["<oov>"]
+        # necessry bc apparently you cant prev an iter
+        if self.mode == "sentence_to_sentence":
+            self.previous_sentence = None
 
-        self.passage_idx = 0
-        self.sentence_idx = 0
+        self.sentence_gen = self._read_jsonl(self.data_dir / "sentences.zst")
 
     def __len__(self: Self) -> int:
         return (
@@ -61,14 +61,23 @@ class OpenWebTextDataset(Dataset):
             else self.num_passages
         )
 
-    def _build_vocab(self: Self) -> None:
-        tokens = nltk.corpus.words.words() + SPECIAL_TOKENS
+    # it's gonna be very slow implementing this to go idx by idx
+    # might just load the next sentence / paragraph off the dataset
+    def __getitem__(self: Self, idx: int) -> tuple:
+        if self.mode == "sentence_to_sentence" and self.previous_sentence is None:
+            self.previous_sentence = json.loads(next(self.sentence_gen))
 
-        vocab = dict(zip(tokens, range(len(tokens))))
-        rvocab = {v: k for k, v in vocab.items()}
+        while self.current_idx != idx:
+            line = json.loads(next(self.sentence_gen))
 
-        return vocab, rvocab
-
+            if self.mode == "sentence_to_sentence":
+                if line != PASSAGE_END:
+                    self.current_idx += 1
+                else:
+                    self.previous_sentence = None
+            else:
+                if line == PASSAGE_END:
+                    self.current_idx += 1
 
     def _read_jsonl(self: Self, file) -> Iterator[str]:
         zstd_ctx = zstd.ZstdDecompressor()
@@ -111,7 +120,6 @@ class OpenWebTextDataset(Dataset):
             open(self.data_dir / "sentences.zst", "wb+") as f,
             compressor.stream_writer(f) as compressed_writer,
         ):
-
             m = p.imap(self._process_file, self.files)
 
             for r in tqdm(m, total=len(self.files)):
@@ -121,9 +129,7 @@ class OpenWebTextDataset(Dataset):
                     )
                     num_sentences += 1
 
-                compressed_writer.write(
-                    json.dumps("### PASSAGE END ###").encode("utf-8") + b"\n"
-                )
+                compressed_writer.write(json.dumps(PASSAGE_END).encode("utf-8") + b"\n")
 
                 num_passages += r["num_passages"]
 

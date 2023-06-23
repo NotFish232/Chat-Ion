@@ -3,6 +3,7 @@ import os
 from collections import Counter
 from string import punctuation
 from typing import Callable, Iterator
+from nltk import word_tokenize
 
 from torch.utils.data import Dataset
 from typing_extensions import Self
@@ -109,15 +110,14 @@ class CornellMovieDataset(Dataset):
 
     def _process_data(self: Self, file_name: str) -> list[tuple[list[str]]]:
         _conversations = {}
-        table = dict.fromkeys(map(ord, punctuation), " ")
         with open(self.data_dir + file_name, "r") as f:
             for line in f:
                 j = json.loads(line)
                 conv_id = j["conversation_id"]
                 if conv_id not in _conversations:
                     _conversations[conv_id] = []
-                text = j["text"].translate(table).lower()
-                _conversations[conv_id].insert(0, text.split())
+                text = j["text"].lower()
+                _conversations[conv_id].insert(0, word_tokenize(text))
 
         conversations = []
         for conv in _conversations.values():
