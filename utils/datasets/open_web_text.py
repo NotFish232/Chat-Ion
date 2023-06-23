@@ -185,9 +185,9 @@ class OpenWebTextDataset(Dataset):
         n = (
             self.max_sentence_length
             if self.mode == Modes.SentToSent
-            or (not is_target and self.mode == Modes.PassToSent)
-            or (is_target and self.mode == Modes.SentToPass)
-            else self.max_sentence_length
+            or (is_target and self.mode == Modes.PassToSent)
+            or (not is_target and self.mode == Modes.SentToPass)
+            else self.max_passage_length
         )
 
         if is_target:
