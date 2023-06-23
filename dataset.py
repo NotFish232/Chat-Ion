@@ -1,7 +1,6 @@
-import torch as T
 from torch.utils.data import Dataset
 from typing_extensions import Self
-from typing import Iterator, Callable
+from typing import Iterator, Callable, Iterable
 import json
 import os
 from string import punctuation
@@ -32,11 +31,15 @@ class ConversationDataset(Dataset):
         self.vocab, self.rvocab = self._build_vocab()
         self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"]
         self.PAD_IDX = self.vocab["<pad>"]
+    
+    @property
+    def num_words(self: Self) -> int:
+        return len(self.vocab)
 
     def __len__(self: Self) -> int:
         return len(self.conversations)
 
-    def __getitem__(self: Self, idx: int) -> tuple[T.Tensor]:
+    def __getitem__(self: Self, idx: int) -> tuple:
         question, answer = self.conversations[idx]
         question_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in question]
         answer_idxs = [self.vocab.get(w, self.OUT_OF_VOCAB_IDX) for w in answer]
@@ -115,7 +118,13 @@ def main() -> None:
     x = ConversationDataset()
     print(len(x.conversations))
     question, answer = x[2]
-    print(question, answer, [x.rvocab[i] for i in question],[x.rvocab[i] for i in answer], sep='\n')
+    print(
+        question,
+        answer,
+        [x.rvocab[i] for i in question],
+        [x.rvocab[i] for i in answer],
+        sep="\n",
+    )
 
 
 if __name__ == "__main__":
