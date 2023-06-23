@@ -39,10 +39,12 @@ class Network(nn.Module):
 
         self.embedding = nn.Embedding(num_embed, embed_dim)
         self.positional_encoding = PositionalEncoding(num_embed, embed_dim)
-        self.transformer = nn.Transformer(embed_dim, batch_first=True)
+        self.transformer = nn.Transformer(embed_dim, nhead=4, batch_first=True)
         self.linear = nn.Linear(embed_dim, num_embed)
 
-    def forward(self: Self, src: T.Tensor, tgt: T.Tensor, mask: T.Tensor = None) -> T.Tensor:
+    def forward(
+        self: Self, src: T.Tensor, tgt: T.Tensor, mask: T.Tensor = None
+    ) -> T.Tensor:
         src = self.embedding(src) * self.embed_dim_sqrt
         tgt = self.embedding(tgt) * self.embed_dim_sqrt
 
@@ -54,7 +56,7 @@ class Network(nn.Module):
         x = self.linear(x)
 
         if not self.training:
-            x = F.softmax(x, dim=1)
+            x = F.softmax(x, dim=-1)
 
         return x
 

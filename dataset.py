@@ -36,9 +36,9 @@ class ConversationDataset(Dataset):
         )
 
         self.vocab, self.rvocab, self.vocab_count = self._build_vocab()
-        self.PAD_IDX = self.vocab["<pad>"]  # 0
-        self.SOS_IDX = self.vocab["<sos>"]  # 1
-        self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"]  # 2
+        self.PAD_IDX = self.vocab["<pad>"]  
+        self.SOS_IDX = self.vocab["<sos>"]  
+        self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"] 
 
         if should_process_data:
             self._filter_conversations_by_vocab()
@@ -76,14 +76,14 @@ class ConversationDataset(Dataset):
         return question_idxs, answer_idxs
 
     def _vocab_generator(self: Self) -> Iterator[str]:
-        special_tokens = ["<pad>", "<sos>", "<oov>", "<mask>"]
-        for token in special_tokens:
-            yield token
         for conv in self.conversations:
             question, answer = conv
             for word in question + answer:
                 if len(word) <= self.max_word_length:
                     yield word
+        special_tokens = ["<pad>", "<sos>", "<oov>", "<mask>"]
+        for token in special_tokens:
+            yield token
 
     def _build_vocab(self: Self) -> tuple[dict, dict]:
         counter = Counter(self._vocab_generator()).items()
