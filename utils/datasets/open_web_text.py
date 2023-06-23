@@ -1,19 +1,19 @@
 import io
+import itertools
 import json
 import multiprocessing as mp
+import random
 from enum import Enum
 from typing import Callable, Iterator
-import itertools
 
-import random
 import nltk
-from .vocabulary import Vocabulary
 import zstandard as zstd
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from typing_extensions import Self
 
 from .shared import DATA_DIR
+from .vocabulary import Vocabulary
 
 """
 modes for training

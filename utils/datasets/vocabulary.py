@@ -16,7 +16,9 @@ class Vocabulary:
         folder_name: str = "vocabulary",
         vocab_file_name: str = "tokens.json",
     ) -> None:
-        self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
+        self.tokenizer = BertTokenizer.from_pretrained(
+            "bert-base-cased", local_files_only=True
+        )
 
         vocab_file_path = DATA_DIR / folder_name / vocab_file_name
         if not vocab_file_path.exists():
@@ -39,7 +41,7 @@ class Vocabulary:
                 if punct in self.tokens:
                     self.tokens.remove(punct)
             self.tokens += list(string.punctuation)
-            self.tokens += SPECIAL_TOKENS 
+            self.tokens += SPECIAL_TOKENS
 
             with open(vocab_file_path, "w+") as f:
                 json.dump(self.tokens, f)
@@ -57,7 +59,7 @@ class Vocabulary:
         self.PAD_IDX = self.token_to_idx["<pad>"]
         self.CLS_IDX = self.token_to_idx["<cls>"]
         self.SEP_IDX = self.token_to_idx["<sep>"]
-    
+
     @property
     def num_tokens(self: Self) -> int:
         return len(self.tokens)
