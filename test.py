@@ -12,6 +12,16 @@ def main():
     network = Network(dataset.num_words, EMBED_DIM).to(device)
     network.load_state_dict(T.load("trained_model.pt"))
 
+    look_ahead_mask = T.triu(
+        T.ones(
+            dataset.max_sentence_length,
+            dataset.max_sentence_length,
+            dtype=T.bool,
+            device=device,
+        ),
+        diagonal=1,
+    )
+
     user_input = ""
     network.eval()
     with T.no_grad():
@@ -24,7 +34,7 @@ def main():
             tgt[0] = dataset.SOS_IDX
 
             for t in range(1, len(tgt)):
-                y = network(sentence, tgt)
+                y = network(sentence, tgt, look_ahead_mask, look_ahead_mask)
                 response = T.argmax(y[0, t - 1])
                 tgt[t] = response
 
