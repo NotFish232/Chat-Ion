@@ -27,10 +27,10 @@ def main() -> None:
     dataset = ConversationDataset(
         transforms=transforms, target_transforms=target_transforms
     )
-    dataloader = DataLoader(dataset, BATCH_SIZE, drop_last=True)
+    dataloader = DataLoader(dataset, BATCH_SIZE)
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)
-    print(f"{sum(i.numel() for i in network.parameters()):,}")
+    print(f"Parameters: {sum(i.numel() for i in network.parameters()):,}")
 
     optimizer = optim.Adam(network.parameters(), LEARNING_RATE)
     criterion = nn.CrossEntropyLoss()
@@ -48,15 +48,24 @@ def main() -> None:
     )
 
     for epoch in range(1, NUM_EPOCHS + 1):
-        acc_loss = 0
+        num_correct = 0
+        num_total = 0
         for prompt, labels in tqdm(dataloader, desc=f"Epoch {epoch}"):
-            y = network(prompt, labels[:, :-1], memory_mask)
-            loss = criterion(y, eye[labels[:, 1:]])
-            acc_loss += loss.detach()
+            labels_input = labels[:, :-1]
+            labels_expected = labels[:, 1:]
+
+            y = network(prompt, labels_input, memory_mask)
+            loss = criterion(y, eye[labels_expected])
+
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-        print(f"Loss: {acc_loss:.2f}")
+
+            num_correct += T.sum(T.argmax(y, dim=-1) == labels_expected)
+            num_total += prompt.size(0) * dataset.max_sentence_length
+
+        print(f"Accuracy: {num_correct / num_total:.2%}")
+
     T.save(network.state_dict(), "trained_model.pt")
 
 
