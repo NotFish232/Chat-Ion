@@ -1,6 +1,6 @@
 from models.network import Network
 from utils.checkpointer import CheckPointer
-from utils.dataset import ConversationDataset
+from utils.dataset import CornellMovieDataset
 
 import torch as T
 from torch import optim, nn
@@ -20,7 +20,7 @@ def main() -> None:
 
     transforms = Lambda(lambda x: T.tensor(x, device=device))
 
-    dataset = ConversationDataset(transforms=transforms, target_transforms=transforms)
+    dataset = CornellMovieDataset(transforms=transforms, target_transforms=transforms)
     dataloader = DataLoader(dataset, BATCH_SIZE)
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)

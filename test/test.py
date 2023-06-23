@@ -1,6 +1,6 @@
 import torch as T
 from models.network import Network
-from utils.dataset import ConversationDataset
+from utils.dataset import CornellMovieDataset
 from utils.checkpointer import CheckPointer
 import warnings
 
@@ -11,7 +11,7 @@ def main():
     warnings.filterwarnings("ignore", category=UserWarning)
 
     device = T.device("cuda" if T.cuda.is_available() else "cpu")
-    dataset = ConversationDataset()
+    dataset = CornellMovieDataset()
 
     network = Network(dataset.num_words, EMBED_DIM).to(device)
 
@@ -42,7 +42,7 @@ def main():
     network.eval()
     with T.no_grad():
         while user_input != "goodbye":
-            user_input = input(">> ")
+            user_input = input(">> ").lower()
             sentence = dataset.tokenize_sentence(user_input.split(" "))
             sentence = T.tensor(sentence, device=device)
 

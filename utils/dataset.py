@@ -1,13 +1,13 @@
 from torch.utils.data import Dataset
 from typing_extensions import Self
-from typing import Iterator, Callable, Iterable
+from typing import Iterator, Callable
 import json
 import os
 from string import punctuation
 from collections import Counter
 
 
-class ConversationDataset(Dataset):
+class CornellMovieDataset(Dataset):
     def __init__(
         self: Self,
         file_name: str = "raw.json",
@@ -152,7 +152,7 @@ class ConversationDataset(Dataset):
 
 
 def main() -> None:
-    x = ConversationDataset()
+    x = CornellMovieDataset()
     print(len(x.conversations))
     question, answer = x[2]
     print(
