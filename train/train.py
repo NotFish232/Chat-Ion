@@ -107,7 +107,9 @@ def training_loop(
 
         if epoch % checkpoint_interval == 0:
             print("Saving checkpoint...")
-            model_loader.save_checkpoint(network, optimizer, scheduler, epoch, accuracy)
+            model_loader.save_checkpoint(
+                network, optimizer, scaler, scheduler, epoch, accuracy
+            )
 
     model_loader.save_model(network)
 
