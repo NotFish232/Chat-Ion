@@ -1,16 +1,16 @@
 import io
 import json
 import multiprocessing as mp
-from typing import Callable, Iterator
-from .shared import DATA_DIR
 from enum import Enum
-
+from typing import Callable, Iterator
 
 import nltk
 import zstandard as zstd
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from typing_extensions import Self
+
+from .shared import DATA_DIR
 
 """
 modes for training
@@ -90,6 +90,7 @@ class OpenWebTextDataset(Dataset):
     otherwise it's going to take way to long to get to an
     arbitrary index in the dataset
     """
+
     def __getitem__(self: Self, idx: int) -> tuple:
         if self.mode == "sentence_to_sentence" and self.previous_sentence is None:
             self.previous_sentence = json.loads(next(self.sentence_gen))

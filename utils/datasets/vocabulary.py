@@ -14,7 +14,9 @@ CORPUS_DICT = {"words": corpus.words, "brown": corpus.brown}
 
 
 class Vocabulary:
-    def __init__(self: Self, corpus_name: str = "words", folder_name: str = "vocabulary") -> None:
+    def __init__(
+        self: Self, corpus_name: str = "words", folder_name: str = "vocabulary"
+    ) -> None:
         assert (
             corpus_name in CORPUS_DICT
         ), f"Corpus {corpus_name} not found, avaliable corpuses are {CORPUS_DICT.keys()}"

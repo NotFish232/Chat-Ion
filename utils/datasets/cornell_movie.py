@@ -37,9 +37,7 @@ class CornellMovieDataset(Dataset):
         should_process_data = not os.path.isfile(self.data_dir / processed_file_name)
 
         self.conversations = (
-            self._process_data()
-            if should_process_data
-            else self._load_data()
+            self._process_data() if should_process_data else self._load_data()
         )
 
         self.vocab, self.rvocab, self.vocab_count = self._build_vocab()
