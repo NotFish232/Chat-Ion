@@ -1,5 +1,6 @@
-import torch as T
 import string
+
+import torch as T
 
 
 def make_look_ahead_mask(n: int, device: T.device) -> T.Tensor:
@@ -31,7 +32,7 @@ def join_tokens(tokens: list[str], subword_start: str = "##") -> str:
     for punct in string.punctuation:
         if punct in TWO_SPACE_PUNCTUATION:
             continue
-        
+
         punct_replaced = punct
 
         if punct in LEFT_SPACE_PUNCTUATION:

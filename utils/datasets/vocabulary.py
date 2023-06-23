@@ -9,29 +9,32 @@ from .shared import DATA_DIR
 
 SPECIAL_TOKENS = ["<sos>", "<eos>", "<mask>", "<oov>", "<pad>", "<cls>", "<sep>"]
 
-CORPUS_DICT = {"words": corpus.words, "brown": corpus.brown}
-
 
 class Vocabulary:
     def __init__(
-        self: Self, corpus_name: str = "words", folder_name: str = "vocabulary"
+        self: Self,
+        folder_name: str = "vocabulary",
+        vocab_file_name: str = "tokens.json",
     ) -> None:
-        assert (
-            corpus_name in CORPUS_DICT
-        ), f"Corpus {corpus_name} not found, avaliable corpuses are {CORPUS_DICT.keys()}"
-
-        corpus = CORPUS_DICT[corpus_name]
-
-        lower_words = set(w.lower() for w in corpus.words())
-        capital_words = set(w.capitalize() for w in lower_words)
-        upper_words = set(w.upper() for w in lower_words)
-        words = lower_words.union(capital_words).union(upper_words)
-
         self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
 
-        vocab_file_path = DATA_DIR / folder_name / "tokens.json"
+        vocab_file_path = DATA_DIR / folder_name / vocab_file_name
         if not vocab_file_path.exists():
-            tokens = list(set(self.tokenizer.tokenize(" ".join(words))))
+            # supplementary word list for more comprehensive vocab
+            with open(DATA_DIR / folder_name / "en_comprehensive.txt", "r") as f:
+                en_comprehensive = f.read().split("\n")
+
+            words = (
+                en_comprehensive
+                + list(corpus.words.words())
+                + list(corpus.wordnet.words())
+            )
+            lower_words = [w.lower() for w in words]
+            capital_words = [w.capitalize() for w in words]
+            upper_words = [w.upper() for w in words]
+            all_words = lower_words + capital_words + upper_words
+
+            tokens = list(set(self.tokenizer.tokenize(" ".join(all_words))))
             tokens += list(string.punctuation)
             tokens += SPECIAL_TOKENS
 

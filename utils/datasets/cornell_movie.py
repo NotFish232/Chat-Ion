@@ -13,8 +13,8 @@ class CornellMovieDataset(Dataset):
         self: Self,
         folder_name: str = "cornell",
         unprocessed_file_name: str = "raw.json",
-        processed_file_name: str = "processed.txt",
-        max_sentence_length: int = 15,
+        processed_file_name: str = "processed.json",
+        max_sentence_length: int = 100,
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
@@ -35,45 +35,55 @@ class CornellMovieDataset(Dataset):
         else:
             self.conversations = self._load_data()
 
-    def prepare_sentence(
-        self: Self, words: list[str], add_start_and_end: bool = False
-    ) -> list[int]:
-        word_idxs = self.vocab.tokenize(words)
-        padding = self.max_sentence_length - len(word_idxs)
+    def _pad_sentence(self: Self, words: list[str]) -> list[int]:
+        words = words[: self.max_sentence_length]
 
-        if add_start_and_end:
-            word_idxs.insert(0, self.vocab.SOS_IDX)
-            word_idxs.append(self.vocab.EOS_IDX)
+        padding = self.max_sentence_length - len(words)
+        words.extend(self.vocab.PAD_IDX for _ in range(padding))
 
-        word_idxs.extend(self.vocab.PAD_IDX for _ in range(padding))
-
-        return word_idxs
+        return words
 
     def __len__(self: Self) -> int:
         return len(self.conversations)
 
     def __getitem__(self: Self, idx: int) -> tuple:
-        question, answer = self.conversations[idx]
-        question_idxs = self.prepare_sentence(question)
-        answer_idxs = self.prepare_sentence(answer, add_start_and_end=True)
+        conversation = next(
+            self.conversations[i]
+            for i in range(len(self.conversations) - 1)
+            if self.conversations[i + 1]["idx"] > idx
+        )
+        sentences = conversation["sentences"]
+        sentence_idx = idx - conversation["idx"] + 1
+
+        question = self._pad_sentence(
+            [self.vocab.CLS_IDX]
+            + sum(
+                (
+                    self.vocab.tokenize(q) + [self.vocab.SEP_IDX]
+                    for q in sentences[:sentence_idx]
+                ),
+                [],
+            )[:-1]
+        )
+        answer = self._pad_sentence(
+            [self.vocab.SOS_IDX]
+            + self.vocab.tokenize(sentences[sentence_idx])
+            + [self.vocab.EOS_IDX]
+        )
 
         if self.transforms is not None:
-            question_idxs = self.transforms(question_idxs)
+            question = self.transforms(question)
         if self.target_transforms is not None:
-            answer_idxs = self.target_transforms(answer_idxs)
+            question = self.target_transforms(answer)
 
-        return question_idxs, answer_idxs
+        return question, answer
 
-    def _load_data(self: Self) -> list[tuple[str]]:
-        conversations = []
+    def _load_data(self: Self) -> list[dict]:
         with open(self.data_dir / self.processed_file_name, "r") as f:
-            for line in f:
-                line = line.strip()
-                question, answer = line.split(" ### ")
-                conversations.append((question, answer))
-        return conversations
+            data = json.load(f)
+        return data
 
-    def _process_data(self: Self) -> list[tuple[str]]:
+    def _process_data(self: Self) -> list[dict]:
         _conversations = {}
         with open(self.data_dir / self.unprocessed_file_name, "r") as f:
             for line in f:
@@ -83,22 +93,21 @@ class CornellMovieDataset(Dataset):
                     _conversations[conv_id] = []
                 _conversations[conv_id].insert(0, j["text"])
 
+        conversation_idxs = [0]
+
+        for conv, _ in zip(_conversations.values(), range(len(_conversations) - 1)):
+            conversation_idxs.append(conversation_idxs[-1] + len(conv) - 1)
+
         conversations = []
-        for conv in _conversations.values():
-            for question, answer in zip(conv, conv[1:]):
-                if (
-                    0 < len(self.vocab.tokenize(question)) <= self.max_sentence_length
-                    and 0 < len(self.vocab.tokenize(answer)) <= self.max_sentence_length
-                ):
-                    conversations.append((question, answer))
+
+        for idx, sentences in zip(conversation_idxs, _conversations.values()):
+            conversations.append({"idx": idx, "sentences": sentences})
 
         return conversations
 
     def _save_data(self: Self) -> None:
         with open(self.data_dir / self.processed_file_name, "w+") as f:
-            for conv in self.conversations:
-                question, answer = conv
-                f.write(f"{question} ### {answer} \n")
+            json.dump(self.conversations, f)
 
 
 def main() -> None:
