@@ -15,22 +15,33 @@ class ConversationDataset(Dataset):
         data_dir: str = "data/",
         max_sentence_length: int = 15,
         max_word_length: int = 10,
+        min_word_freq: int = 5,
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
         self.data_dir = data_dir
         self.max_sentence_length = max_sentence_length
         self.max_word_length = max_word_length
+        self.min_word_freq = min_word_freq
+
         self.transforms = transforms
         self.target_transforms = target_transforms
+
+        should_process_data = not os.path.isfile(data_dir + processed_file_name)
+
         self.conversations = (
-            self._process_data(file_name, processed_file_name)
-            if not os.path.isfile(data_dir + processed_file_name)
+            self._process_data(file_name)
+            if should_process_data
             else self._load_data(processed_file_name)
         )
-        self.vocab, self.rvocab = self._build_vocab()
+
+        self.vocab, self.rvocab, self.vocab_count = self._build_vocab()
         self.OUT_OF_VOCAB_IDX = self.vocab["<oov>"]
         self.PAD_IDX = self.vocab["<pad>"]
+
+        if should_process_data:
+            self.conversations = self._filter_conversations_by_vocab()
+            self._save_data(processed_file_name)
 
     @property
     def num_words(self: Self):
@@ -69,12 +80,13 @@ class ConversationDataset(Dataset):
                     yield word
 
     def _build_vocab(self: Self) -> tuple[dict, dict]:
-        counter = Counter(self._vocab_generator()).most_common()
-        vocab, rvocab = {}, {}
-        for i, (el, _) in enumerate(counter):
+        counter = Counter(self._vocab_generator()).items()
+        vocab, rvocab, vocab_count = {}, {}, {}
+        for i, (el, count) in enumerate(counter):
             vocab[el] = i
             rvocab[i] = el
-        return vocab, rvocab
+            vocab_count[el] = count
+        return vocab, rvocab, vocab_count
 
     def _load_data(self: Self, processed_file_name: str) -> list[tuple[list[str]]]:
         conversations = []
@@ -85,9 +97,7 @@ class ConversationDataset(Dataset):
                 conversations.append((question.split(" "), answer.split(" ")))
         return conversations
 
-    def _process_data(
-        self: Self, file_name: str, processed_file_name: str
-    ) -> list[tuple[list[str]]]:
+    def _process_data(self: Self, file_name: str) -> list[tuple[list[str]]]:
         _conversations = {}
         table = dict.fromkeys(map(ord, punctuation), " ")
         with open(self.data_dir + file_name, "r") as f:
@@ -108,12 +118,24 @@ class ConversationDataset(Dataset):
                 ):
                     conversations.append((question, answer))
 
+        return conversations
+
+    def _save_data(self: Self, processed_file_name: str) -> None:
         with open(self.data_dir + processed_file_name, "w+") as f:
-            for conv in conversations:
+            for conv in self.conversations:
                 question, answer = conv
                 f.write(f"{' '.join(question)} ### {' '.join(answer)} \n")
 
-        return conversations
+    def _filter_conversations_by_vocab(self: Self) -> list[tuple[str, str]]:
+        new_conversations = []
+        for conv in self.conversations:
+            question, answer = conv
+            if all(
+                w in self.vocab_count and self.vocab_count[w] > self.min_word_freq
+                for w in " ".join(question + answer).split(" ")
+            ):
+                new_conversations.append(conv)
+        return new_conversations
 
 
 def main() -> None:
