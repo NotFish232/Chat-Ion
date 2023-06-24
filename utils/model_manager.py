@@ -2,9 +2,8 @@ import json
 from pathlib import Path
 
 import torch as T
-from torch import nn, optim
-from torch.cuda import amp
-from torch.optim import lr_scheduler
+from torch import nn
+from models import Network
 from typing_extensions import Self
 
 BASE_DIR = Path(__file__).parents[1]
@@ -46,17 +45,20 @@ class ModelManager:
             and Path(self.model_dir / "info.json").exists()
         )
 
-    def load_model(self: Self, model: nn.Module) -> dict | None:
+    def load_model_info(self: Self) -> dict:
         if not self.model_exists():
             return None
 
-        state_dict = T.load(self.model_dir / "model.pt")
-        model.load_state_dict(state_dict)
-
         with open(self.model_dir / "info.json", "rt") as f:
             info = json.load(f)
-
         return info
+
+    def load_model(self: Self, model: nn.Module) -> None:
+        if not self.model_exists():
+            return
+
+        state_dict = T.load(self.model_dir / "model.pt")
+        model.load_state_dict(state_dict)
 
     def load_checkpoint(self: Self, *args: tuple) -> tuple:
         if not self.checkpoint_exists():
