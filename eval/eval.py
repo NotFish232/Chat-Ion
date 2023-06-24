@@ -3,9 +3,9 @@ import warnings
 import torch as T
 
 from models import Network
-from utils import Vocabulary, ModelManager
+from utils import ModelManager, Vocabulary, make_look_ahead_mask
+
 from .arg_parser import get_args
-from utils import make_look_ahead_mask
 
 
 def run_evaluation(model_name: str, device: str) -> None:
@@ -18,7 +18,6 @@ def run_evaluation(model_name: str, device: str) -> None:
     model_kwargs = model_mgr.load_model_info()
     network = Network(len(vocab), **model_kwargs).to(device)
     model_mgr.load_model(network)
-
 
     max_seq_len = model_kwargs["max_seq_len"]
 

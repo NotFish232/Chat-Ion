@@ -3,7 +3,6 @@ from pathlib import Path
 
 import torch as T
 from torch import nn
-from models import Network
 from typing_extensions import Self
 
 BASE_DIR = Path(__file__).parents[1]

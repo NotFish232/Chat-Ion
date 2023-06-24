@@ -3,6 +3,7 @@ from argparse import ArgumentParser
 DEFAULT_MODEL_NAME = "Chat-Ion"
 DEFAULT_DEVICE = "cuda"
 
+
 def get_args() -> dict:
     arg_parser = ArgumentParser()
 

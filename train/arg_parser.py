@@ -7,6 +7,7 @@ DEFAULT_LR = 2e-5
 DEFAULT_WEIGHT_DECAY = 1e-2
 DEFAULT_CHECKPOINT_INTERVAL = 50
 DEFAULT_DEVICE = "cuda"
+DEFAULT_NUM_GPUS = -1
 
 DEFAULT_DROPUT = 1e-1
 DEFAULT_EMBED_DIM = 768
@@ -69,6 +70,13 @@ def get_args() -> dict:
         type=str,
         default=DEFAULT_DEVICE,
         help=f"device to train on, defaults to '{DEFAULT_DEVICE}'",
+    )
+    train_group.add_argument(
+        "-ng",
+        "--num-gpus",
+        type=int,
+        default=DEFAULT_NUM_GPUS,
+        help=f"Num of GPUs to train on in DDP, defaults to all GPU's",
     )
 
     model_group = arg_parser.add_argument_group("model")

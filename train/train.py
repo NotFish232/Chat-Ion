@@ -139,11 +139,10 @@ def training_loop(
     if model_mgr.checkpoint_exists():
         logger.info("Checkpoint exists, loading save!")
         checkpoint = model_mgr.load_checkpoint(network, optimizer, scheduler, scaler)
-        starting_epochs, starting_accuracy = checkpoint
+        (starting_epochs,) = checkpoint
     else:
         logger.info("Checkpoint doesn't exist, creating new model.")
         starting_epochs = 0
-        starting_accuracy = 0
 
     for epoch in range(starting_epochs + 1, starting_epochs + epochs + 1):
         num_correct = 0
@@ -197,9 +196,7 @@ def training_loop(
             ):
                 logger.info("Saving checkpoint...")
                 accuracy = num_correct / num_total
-                model_mgr.save_checkpoint(
-                    network, optimizer, scheduler, scaler, epoch, accuracy
-                )
+                model_mgr.save_checkpoint(network, optimizer, scheduler, scaler, epoch)
 
         avg_loss = total_loss / len(dataloader)
 
@@ -225,8 +222,10 @@ def main() -> None:
 
     print(f"Training with arguments: {training_args | model_args}")
 
+    num_gpus = training_args.pop("num_gpus")
+
     if training_args["device"] == "cuda":
-        world_size = T.cuda.device_count()
+        world_size = num_gpus if num_gpus != -1 else T.cuda.device_count()
         os.environ["OPENBLAS_NUM_THREADS"] = "20"
         mp.spawn(
             _training_loop_helper,
