@@ -28,25 +28,26 @@ def run_evaluation(model_name: str, device: str) -> None:
     with T.no_grad():
         while user_input != "goodbye":
             user_input = input(">> ").lower()
-            sentence = vocab.tokenize(sentence)
+            sentence = [vocab.CLS_IDX] + vocab.tokenize(user_input)
             sentence.extend(vocab.PAD_IDX for _ in range(max_seq_len - len(sentence)))
-            sentence = T.tensor(sentence, device=device)
+            sentence = T.tensor(sentence, device=device).unsqueeze(0)
 
-            tgt = T.full((max_seq_len + 1), vocab.PAD_IDX, device=device)
-            tgt[0] = vocab.SOS_IDX
+            tgt = T.full((1, max_seq_len + 1), vocab.PAD_IDX, device=device)
+            tgt[0, 0] = vocab.SOS_IDX
 
-            for t in range(1, len(tgt)):
+            for t in range(1, tgt.size(-1)):
+                tgt_input = tgt[0, :-1]
                 masks = {
                     "tgt_mask": look_ahead_mask,
                     "src_key_padding_mask": sentence == vocab.PAD_IDX,
-                    "tgt_key_padding_mask": tgt == vocab.PAD_IDX,
+                    "tgt_key_padding_mask": tgt_input == vocab.PAD_IDX,
                 }
-                y = network(sentence, tgt, **masks)
+                y = network(sentence, tgt_input, **masks)
 
                 response = T.argmax(y[0, t - 1])
-                tgt[t] = response
+                tgt[0, t] = response
 
-                if response == vocab.EOS_IDX:
+                if response.item() == vocab.EOS_IDX:
                     break
 
                 print(vocab.idx_to_token[response.item()], end=" ")

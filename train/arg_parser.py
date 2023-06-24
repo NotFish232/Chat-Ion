@@ -1,17 +1,17 @@
 from argparse import ArgumentParser
 
 DEFAULT_MODEL_NAME = "Chat-Ion"
-DEFAULT_EPOCHS = 3
-DEFAULT_BATCH_SIZE = 64
-DEFAULT_LR = 2e-5
-DEFAULT_WEIGHT_DECAY = 1e-2
-DEFAULT_CHECKPOINT_INTERVAL = 50
+DEFAULT_EPOCHS = 10
+DEFAULT_BATCH_SIZE = 128
+DEFAULT_LR = 1e-4
+DEFAULT_WEIGHT_DECAY = 5e-2
+DEFAULT_CHECKPOINT_INTERVAL = 100
 DEFAULT_DEVICE = "cuda"
 DEFAULT_NUM_GPUS = -1
 
-DEFAULT_DROPUT = 1e-1
+DEFAULT_DROPUT = 2.5e-1
 DEFAULT_EMBED_DIM = 768
-DEFAULT_MAX_SEQ_LEN = 512
+DEFAULT_MAX_SEQ_LEN = 300
 DEFAULT_NUM_ENCODER_LAYERS = 12
 DEFAULT_NUM_DECODER_LAYERS = 12
 DEFAULT_NUM_HEADS = 12
@@ -58,7 +58,7 @@ def get_args() -> dict:
         help=f"weight decay, defaults to '{DEFAULT_WEIGHT_DECAY}'",
     )
     train_group.add_argument(
-        "-c",
+        "-ci",
         "--checkpoint-interval",
         type=int,
         default=DEFAULT_CHECKPOINT_INTERVAL,

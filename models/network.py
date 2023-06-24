@@ -7,7 +7,7 @@ from typing_extensions import Self
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self: Self, max_seq_len: int, embed_dim: int) -> None:
+    def __init__(self: Self, max_seq_len: int, embed_dim: int, dropout: float) -> None:
         super().__init__()
 
         assert embed_dim % 2 == 0, "Size of embeddings must be an even number"
@@ -26,7 +26,7 @@ class PositionalEncoding(nn.Module):
 
         self.register_buffer("encoding", encoding, persistent=False)
 
-        self.dropout = nn.Dropout1d()
+        self.dropout = nn.Dropout1d(dropout)
 
     def forward(self: Self, x: T.Tensor) -> T.Tensor:
         return self.dropout(x + self.encoding[: x.size(-2)].unsqueeze(0))
@@ -49,7 +49,7 @@ class Network(nn.Module):
         self.embed_dim_sqrt = math.sqrt(embed_dim)
 
         self.embedding = nn.Embedding(num_embed, embed_dim)
-        self.positional_encoding = PositionalEncoding(max_seq_len, embed_dim)
+        self.positional_encoding = PositionalEncoding(max_seq_len, embed_dim, dropout)
         self.transformer = nn.Transformer(
             d_model=embed_dim,
             nhead=num_heads,

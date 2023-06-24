@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import re
 
 import torch as T
 from torch import nn
@@ -15,6 +16,8 @@ DEFAULT_SAVE_KEYS = [
     "accuracy",
     "epochs",
 ]
+
+MODULE_REGEX = re.compile("module.")
 
 
 class ModelManager:
@@ -56,7 +59,13 @@ class ModelManager:
         if not self.model_exists():
             return
 
-        state_dict = T.load(self.model_dir / "model.pt")
+        _state_dict = T.load(self.model_dir / "model.pt")
+
+        # state dict format gets changed when using DDP, fix here
+        state_dict = {}
+        for key, value in _state_dict.items():
+            state_dict[re.sub(MODULE_REGEX, "", key)] = value
+
         model.load_state_dict(state_dict)
 
     def load_checkpoint(self: Self, *args: tuple) -> tuple:
