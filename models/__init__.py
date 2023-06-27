@@ -1,1 +1,2 @@
-from .network import Network
+from .transformer import Transformer
+from .reformer import Reformer

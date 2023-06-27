@@ -4,35 +4,10 @@ import torch as T
 from torch import nn
 from torch.nn import functional as F
 from typing_extensions import Self
+from .positional_encoding import SinusoidalPositionalEncoding
 
 
-class PositionalEncoding(nn.Module):
-    def __init__(self: Self, max_seq_len: int, embed_dim: int, dropout: float) -> None:
-        super().__init__()
-
-        assert embed_dim % 2 == 0, "Size of embeddings must be an even number"
-        self.max_seq_len = max_seq_len
-        self.embed_dim = embed_dim
-
-        encoding = T.zeros((max_seq_len, embed_dim))
-        positions = T.arange(max_seq_len).unsqueeze(1).repeat(1, embed_dim // 2)
-        div_terms = (
-            (10_000 ** (T.arange(0, embed_dim, 2) / embed_dim))
-            .unsqueeze(0)
-            .repeat_interleave(max_seq_len, 0)
-        )
-        encoding[:, 0::2] = T.sin(positions / div_terms)
-        encoding[:, 1::2] = T.cos(positions / div_terms)
-
-        self.register_buffer("encoding", encoding, persistent=False)
-
-        self.dropout = nn.Dropout1d(dropout)
-
-    def forward(self: Self, x: T.Tensor) -> T.Tensor:
-        return self.dropout(x + self.encoding[: x.size(-2)].unsqueeze(0))
-
-
-class Network(nn.Module):
+class Transformer(nn.Module):
     def __init__(
         self: Self,
         num_embed: int,
@@ -44,12 +19,14 @@ class Network(nn.Module):
         feed_forward_dim: int,
         dropout: float,
     ) -> None:
-        super().__init__()
+        super(Transformer, self).__init__()
 
         self.embed_dim_sqrt = math.sqrt(embed_dim)
 
         self.embedding = nn.Embedding(num_embed, embed_dim)
-        self.positional_encoding = PositionalEncoding(max_seq_len, embed_dim, dropout)
+        self.positional_encoding = SinusoidalPositionalEncoding(
+            max_seq_len, embed_dim, dropout
+        )
         self.transformer = nn.Transformer(
             d_model=embed_dim,
             nhead=num_heads,
@@ -66,8 +43,8 @@ class Network(nn.Module):
         src = self.embedding(src) * self.embed_dim_sqrt
         tgt = self.embedding(tgt) * self.embed_dim_sqrt
 
-        src = self.positional_encoding(src)
-        tgt = self.positional_encoding(tgt)
+        src += self.positional_encoding(src)
+        tgt += self.positional_encoding(tgt)
 
         x = self.transformer(src, tgt, **kwargs)
 
@@ -80,7 +57,7 @@ class Network(nn.Module):
 
 
 def main() -> None:
-    n = Network(10, 8)
+    n = Transformer(10, 8)
     n.eval()
     print(f"{sum(i.numel() for i in n.parameters()):,}")
     x = T.randint(0, 5, (1, 10))
