@@ -4,7 +4,7 @@ from typing import Callable
 from torch.utils.data import Dataset
 from typing_extensions import Self
 
-from .shared import DATA_DIR
+from .shared import DATA_DIR, Modes
 from .vocabulary import Vocabulary
 
 
@@ -30,6 +30,8 @@ class CornellMovieDataset(Dataset):
         self.target_transforms = target_transforms
 
         self.vocab = Vocabulary()
+
+        self.mode = Modes.Conversation
 
         if not (self.data_dir / processed_file_name).exists():
             self.conversations = self._process_data()

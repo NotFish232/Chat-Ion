@@ -3,7 +3,6 @@ import itertools
 import json
 import multiprocessing as mp
 import random
-from enum import Enum
 from typing import Callable, Iterator
 
 import nltk
@@ -12,25 +11,8 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 from typing_extensions import Self
 
-from .shared import DATA_DIR
+from .shared import DATA_DIR, Modes
 from .vocabulary import Vocabulary
-
-"""
-modes for training
-pass in sentence -> model outputs sentence
-pass in sentence -> model outputs rest of passage
-pass in most of passage -> model outputs last sentence
-pass in half the passage -> model outputs other half of passage
-masks random tokens, like in BERT
-"""
-
-
-class Modes(Enum):
-    SentToSent = 0
-    SentToPass = 1
-    PassToSent = 2
-    PassToPass = 3
-    Masking = 4
 
 
 PASSAGE_END = "### PASSAGE END ###"
@@ -54,11 +36,7 @@ class OpenWebTextDataset(Dataset):
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
-        assert isinstance(mode, (Modes, str)), "mode must be of type Modes or str"
         if isinstance(mode, str):
-            assert (
-                mode in Modes.__members__
-            ), f"mode '{mode} not avaliable, possible modes are {[k for k in Modes.__members__]}"
             mode = Modes.__members__.get(mode)
         self.mode = mode
 
@@ -129,7 +107,7 @@ class OpenWebTextDataset(Dataset):
             if self.mode == Modes.SentToSent
             else (passage[0], passage[1:])
             if self.mode == Modes.SentToPass
-            else (passage[:-1], passage[-1])
+            else ("".join(passage[:-1]), passage[-1])
             if self.mode == Modes.PassToSent
             else (passage[: len(passage) // 2], passage[len(passage) // 2 :])
             if self.mode == Modes.PassToPass
@@ -137,6 +115,11 @@ class OpenWebTextDataset(Dataset):
             if Modes.Masking
             else (None, None)
         )
+
+        if isinstance(input, list):
+            input = "".join(input)
+        if isinstance(target, list):
+            target = "".join(target)
 
         input = self.vocab.tokenize(input)
         target = self.vocab.tokenize(target)
@@ -190,17 +173,22 @@ class OpenWebTextDataset(Dataset):
             else self.max_passage_length
         )
 
-        if is_target:
-            n -= 1
+        if self.mode == Modes.Masking:
+            is_target = False
+
+        n -= (1 if is_target else 2)
 
         if len(tokens) > n:
             tokens = tokens[-n:] if not is_target else tokens[:n]
 
-        num_pads = n - len(tokens)
-
         if is_target:
+            num_pads = n - len(tokens)
             tokens.insert(0, self.vocab.SOS_IDX)
             tokens.append(self.vocab.EOS_IDX)
+        else:
+            tokens.insert(0, self.vocab.CLS_IDX)
+            tokens.append(self.vocab.SEP_IDX)
+            num_pads = n - len(tokens)
 
         tokens.extend(self.vocab.PAD_IDX for _ in range(num_pads))
 
