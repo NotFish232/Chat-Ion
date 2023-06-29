@@ -2,16 +2,17 @@ from argparse import ArgumentParser
 
 DEFAULT_MODEL_NAME = "Chat-Ion"
 DEFAULT_EPOCHS = 10
-DEFAULT_BATCH_SIZE = 64
+DEFAULT_BATCH_SIZE = 16
+DEFAULT_GRAD_ACC_STEPS = 5
 DEFAULT_LR = 1e-4
 DEFAULT_WEIGHT_DECAY = 5e-2
-DEFAULT_CHECKPOINT_INTERVAL = 100
+DEFAULT_CHECKPOINT_INTERVAL = 500
 DEFAULT_DEVICE = "cuda"
 DEFAULT_NUM_GPUS = -1
 
-DEFAULT_DROPUT = 2.5e-1
+DEFAULT_DROPUT = 2e-1
 DEFAULT_EMBED_DIM = 768
-DEFAULT_MAX_SEQ_LEN = 300
+DEFAULT_MAX_SEQ_LEN = 1024
 DEFAULT_NUM_ENCODER_LAYERS = 12
 DEFAULT_NUM_DECODER_LAYERS = 12
 DEFAULT_NUM_HEADS = 12
@@ -42,6 +43,13 @@ def get_args() -> dict:
         type=int,
         default=DEFAULT_BATCH_SIZE,
         help=f"batch size, defaults to '{DEFAULT_BATCH_SIZE}'",
+    )
+    train_group.add_argument(
+        "-ga",
+        "--grad-acc-steps",
+        type=int,
+        default=DEFAULT_GRAD_ACC_STEPS,
+        help=f"gradient accumulation steps, defaults to '{DEFAULT_GRAD_ACC_STEPS}'",
     )
     train_group.add_argument(
         "-lr",

@@ -2,7 +2,7 @@ import warnings
 
 import torch as T
 
-from models import Network
+from models import Transformer
 from utils import ModelManager, Vocabulary, make_look_ahead_mask
 
 from .arg_parser import get_args
@@ -16,7 +16,7 @@ def run_evaluation(model_name: str, device: str) -> None:
     vocab = Vocabulary()
 
     model_kwargs = model_mgr.load_model_info()
-    network = Network(len(vocab), **model_kwargs).to(device)
+    network = Transformer(len(vocab), **model_kwargs).to(device)
     model_mgr.load_model(network)
 
     max_seq_len = model_kwargs["max_seq_len"]
@@ -34,9 +34,10 @@ def run_evaluation(model_name: str, device: str) -> None:
 
             tgt = T.full((1, max_seq_len + 1), vocab.PAD_IDX, device=device)
             tgt[0, 0] = vocab.SOS_IDX
+            print(tgt.shape)
 
             for t in range(1, tgt.size(-1)):
-                tgt_input = tgt[0, :-1]
+                tgt_input = tgt[:, :-1]
                 masks = {
                     "tgt_mask": look_ahead_mask,
                     "src_key_padding_mask": sentence == vocab.PAD_IDX,

@@ -123,19 +123,21 @@ def training_loop(
     model_name: str,
     epochs: int,
     batch_size: int,
+    grad_acc_steps: int,
     learning_rate: float,
     weight_decay: float,
     max_seq_len: int,
     checkpoint_interval: int,
     device: str,
-    model_kwargs: dict,
+    model_kwargs: dict = {},
     rank: int = -1,
     world_size: int = -1,
 ) -> None:
     logger = prepare_logger(rank, world_size)
-    device = T.device(f"cuda:{rank}" if is_multi_gpu(rank, world_size) else device)
-    vocab = Vocabulary()
 
+    device = T.device(f"cuda:{rank}" if is_multi_gpu(rank, world_size) else device)
+
+    vocab = Vocabulary()
     transforms = Lambda(lambda x: T.tensor(x, device=device))
     dataloader = prepare_dataloader(
         batch_size,
@@ -152,17 +154,12 @@ def training_loop(
         world_size,
         device=device,
     )
-
     logger.info(f"Parameters: {sum(i.numel() for i in network.parameters()):,}")
 
     optimizer = prepare_optimizer(network, learning_rate, weight_decay)
-
-    scheduler = CosineAnnealingWarmRestarts(optimizer, 20)
-
+    scheduler = CosineAnnealingWarmRestarts(optimizer, 10)
     scaler = amp.GradScaler(enabled=device.type == "cuda")
-
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.PAD_IDX)
-
     model_mgr = ModelManager(model_name)
 
     if model_mgr.checkpoint_exists():
@@ -173,16 +170,19 @@ def training_loop(
         logger.info("Checkpoint doesn't exist, creating new model.")
         starting_epochs = 0
 
-    batch_idx = 0
+    iteration = 0
     for epoch in range(starting_epochs + 1, starting_epochs + epochs + 1):
         num_correct = 0
         num_total = 0
         total_loss = 0
 
-        for prompts, labels in tqdm(
-            dataloader,
-            desc=f"Epoch {epoch}",
-            disable=not is_main_process(rank, world_size),
+        for batch_idx, (prompts, labels) in zip(
+            range(1, len(dataloader) + 1),
+            tqdm(
+                dataloader,
+                desc=f"Epoch {epoch}",
+                disable=not is_main_process(rank, world_size),
+            ),
         ):
             labels_input = labels[:, :-1]
             labels_expected = labels[:, 1:]
@@ -203,30 +203,28 @@ def training_loop(
 
             total_loss += loss.item()
 
-            if device.type == "cuda":
-                scaler.scale(loss).backward()
+            loss /= grad_acc_steps
+            scaler.scale(loss).backward()
+
+            if batch_idx % grad_acc_steps == 0 or batch_idx == len(dataloader):
                 scaler.step(optimizer)
                 scaler.update()
-            else:
-                loss.backward()
-                optimizer.step()
-
-            optimizer.zero_grad()
-            scheduler.step()
+                optimizer.zero_grad()
+                scheduler.step()
 
             num_correct += T.sum(T.argmax(y, dim=-1) == labels_expected).item()
             num_total += prompts.size(0) * prompts.size(1)
 
             if (
-                batch_idx != 0
-                and batch_idx % checkpoint_interval == 0
+                iteration != 0
+                and iteration % checkpoint_interval == 0
                 and is_main_process(rank, world_size)
             ):
                 logger.info("Saving checkpoint...")
                 accuracy = num_correct / num_total
                 model_mgr.save_checkpoint(network, optimizer, scheduler, scaler, epoch)
 
-            batch_idx += 1
+            iteration += 1
 
         avg_loss = total_loss / len(dataloader)
 
