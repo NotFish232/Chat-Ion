@@ -2,6 +2,7 @@ import torch as T
 from torch import nn
 from typing_extensions import Self
 import math
+import timeit
 
 
 class SinusoidalPositionalEncoding(nn.Module):
@@ -72,7 +73,7 @@ class AxialPositionalEncoding(nn.Module):
         self.dropout = nn.Dropout(dropout_p)
 
     def _get_largest_factor_pair(self: Self, n: int) -> tuple[int, int]:
-        for i in reversed(range(int(math.sqrt(n)))):
+        for i in reversed(range(int(math.sqrt(n) + 1))):
             if n % i == 0:
                 return i, n // i
         return -1, -1
@@ -93,23 +94,26 @@ class AxialPositionalEncoding(nn.Module):
         encodings[encodings_bool] = x1_part
         encodings[~encodings_bool] = x2_part
 
-        return encodings
+        return self.dropout(encodings)
 
 
 if __name__ == "__main__":
-    seq_len = 100_000
-    embed_dim = 4096
-    x = T.randn(2, seq_len, embed_dim)
+    seq_len = 1028
+    embed_dim = 768
+    x = T.randn(128, seq_len, embed_dim)
     pe1 = SinusoidalPositionalEncoding(seq_len, embed_dim, 0)
     pe2 = LearnedPositionalEncoding(seq_len, embed_dim, 0)
     pe3 = AxialPositionalEncoding(seq_len, embed_dim, 0)
-    print(f"pe1: {sum(i.numel() for i in pe1.parameters()):,}")
-    print(f"pe2: {sum(i.numel() for i in pe2.parameters()):,}")
-    print(f"pe3: {sum(i.numel() for i in pe3.parameters()):,}")
-
-    """
+    print(f"pe1: {sum(i.numel() for i in pe1.parameters()):,} params")
+    print(f"pe2: {sum(i.numel() for i in pe2.parameters()):,} params")
+    print(f"pe3: {sum(i.numel() for i in pe3.parameters()):,} params")
+    
     with T.no_grad():
-        print(pe1(x).shape)
-        print(pe2(x).shape)
-        print(pe3(x).shape)
-    """
+        t1 = timeit.timeit(lambda: pe1(x), number=1_000)
+        t2 = timeit.timeit(lambda: pe2(x), number=1_000)
+        t3 = timeit.timeit(lambda: pe3(x), number=1_000)
+    
+    print(f"pe1: {t1:.2f} sec")
+    print(f"pe2: {t2:.2f} sec")
+    print(f"pe3: {t3:.3f} sec")
+    

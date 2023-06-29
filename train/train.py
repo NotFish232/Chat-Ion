@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Lambda
 from tqdm import tqdm
 
-from models import Network
+from models import Transformer
 from train.arg_parser import get_args
 from utils import *
 from utils.datasets import CornellMovieDataset
@@ -72,7 +72,7 @@ def prepare_network(
     world_size: int,
     device: T.device,
 ) -> nn.Module:
-    network = Network(**model_kwargs).to(device)
+    network = Transformer(**model_kwargs).to(device)
     if is_multi_gpu(rank, world_size):
         setup_distributed(rank, world_size)
         network = DDP(network, device_ids=[rank])
@@ -159,7 +159,7 @@ def training_loop(
 
     scheduler = CosineAnnealingWarmRestarts(optimizer, 20)
 
-    scaler = amp.GradScaler() if device.type == "cuda" else None
+    scaler = amp.GradScaler(enabled=device.type == "cuda")
 
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.PAD_IDX)
 

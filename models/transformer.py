@@ -4,7 +4,7 @@ import torch as T
 from torch import nn
 from torch.nn import functional as F
 from typing_extensions import Self
-from .positional_encoding import SinusoidalPositionalEncoding
+from .components.positional_encoding import SinusoidalPositionalEncoding
 
 
 class Transformer(nn.Module):
