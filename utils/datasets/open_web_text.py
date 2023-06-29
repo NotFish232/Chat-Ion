@@ -140,7 +140,8 @@ class OpenWebTextDataset(Dataset):
     def _mask(
         self: Self, input: list[str], target: list[str]
     ) -> tuple[list[int], list[int]]:
-        for idx in range(len(input)):
+        # don't mask cls or sep tokens
+        for idx in range(1, len(input) - 1):
             if input[idx] == self.vocab.PAD_IDX:
                 break
 
@@ -176,19 +177,21 @@ class OpenWebTextDataset(Dataset):
         if self.mode == Modes.Masking:
             is_target = False
 
+        # max length before special tokens
         n -= (1 if is_target else 2)
 
+
         if len(tokens) > n:
-            tokens = tokens[-n:] if not is_target else tokens[:n]
+            tokens = tokens[:n] if is_target else tokens[-n:] 
+
+        num_pads = n - len(tokens)
 
         if is_target:
-            num_pads = n - len(tokens)
             tokens.insert(0, self.vocab.SOS_IDX)
             tokens.append(self.vocab.EOS_IDX)
         else:
             tokens.insert(0, self.vocab.CLS_IDX)
             tokens.append(self.vocab.SEP_IDX)
-            num_pads = n - len(tokens)
 
         tokens.extend(self.vocab.PAD_IDX for _ in range(num_pads))
 

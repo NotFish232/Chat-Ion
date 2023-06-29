@@ -66,7 +66,7 @@ class CornellMovieDataset(Dataset):
                     for q in sentences[:sentence_idx]
                 ),
                 [],
-            )[:-1],
+            ),
             self.max_context_length,
         )
         answer = self._pad_sentence(

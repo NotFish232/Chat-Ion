@@ -34,7 +34,6 @@ def run_evaluation(model_name: str, device: str) -> None:
 
             tgt = T.full((1, max_seq_len + 1), vocab.PAD_IDX, device=device)
             tgt[0, 0] = vocab.SOS_IDX
-            print(tgt.shape)
 
             for t in range(1, tgt.size(-1)):
                 tgt_input = tgt[:, :-1]

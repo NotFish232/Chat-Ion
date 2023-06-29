@@ -16,7 +16,8 @@ from tqdm import tqdm
 from models import Transformer
 from train.arg_parser import get_args
 from utils import *
-from utils.datasets import CornellMovieDataset
+from utils.datasets.shared import Modes
+from utils.datasets import CornellMovieDataset, OpenWebTextDataset
 
 
 def setup_distributed(rank: int = -1, world_size: int = -1) -> None:
@@ -50,18 +51,32 @@ def prepare_dataloader(
 ) -> DataLoader:
     max_sentence_len = max_seq_len // 4
     max_passage_len = max_seq_len
-    dataset = CornellMovieDataset(
-        max_context_length=max_passage_len,
+
+    dataset1 = CornellMovieDataset(
         max_sentence_length=max_sentence_len,
+        max_context_length=max_passage_len,
         transforms=transforms,
         target_transforms=target_transforms,
     )
-    sampler = (
-        InterleavedSampler(len(dataset), rank, world_size)
-        if is_multi_gpu(rank, world_size)
-        else None
+    dataset2 = OpenWebTextDataset(
+        Modes.Masking,
+        max_sentence_length=max_sentence_len,
+        max_passage_length=max_passage_len,
+        transforms=transforms,
+        target_transforms=target_transforms,
     )
-    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
+
+    if is_multi_gpu(rank, world_size):
+        sampler1 = InterleavedSampler(len(dataset1), rank, world_size)
+        sampler2 = InterleavedSampler(len(dataset2), rank, world_size)
+    else:
+        sampler1 = None
+        sampler2 = None
+
+    dataloader1 = DataLoader(dataset1, batch_size, sampler=sampler1)
+    dataloader2 = DataLoader(dataset2, batch_size, sampler=sampler2)
+
+    dataloader = InterleavedDataLoader(dataloader1, dataloader2)
 
     return dataloader
 
@@ -157,7 +172,7 @@ def training_loop(
     logger.info(f"Parameters: {sum(i.numel() for i in network.parameters()):,}")
 
     optimizer = prepare_optimizer(network, learning_rate, weight_decay)
-    scheduler = CosineAnnealingWarmRestarts(optimizer, 10)
+    scheduler = CosineAnnealingWarmRestarts(optimizer, 50)
     scaler = amp.GradScaler(enabled=device.type == "cuda")
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.PAD_IDX)
     model_mgr = ModelManager(model_name)
@@ -184,8 +199,12 @@ def training_loop(
                 disable=not is_main_process(rank, world_size),
             ),
         ):
-            labels_input = labels[:, :-1]
-            labels_expected = labels[:, 1:]
+            # no need to shift input / output by 1 when running a masking task
+            if dataloader.current_mode == Modes.Masking:
+                labels_input = labels_expected = labels
+            else:
+                labels_input = labels[:, :-1]
+                labels_expected = labels[:, 1:]
 
             masks = {
                 "tgt_mask": make_look_ahead_mask(labels_input.size(-1), device),

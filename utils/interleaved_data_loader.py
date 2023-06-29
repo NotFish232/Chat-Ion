@@ -16,7 +16,7 @@ class InterleavedDataLoader(DataLoader):
 
     @property
     def current_mode(self: Self) -> Modes:
-        return self.dataloaders[self.current_idx].mode
+        return self.dataloaders[self.current_idx].dataset.mode
 
     def __len__(self: Self) -> int:
         return sum(self.lengths)
