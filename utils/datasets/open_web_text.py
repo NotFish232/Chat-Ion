@@ -135,7 +135,7 @@ class OpenWebTextDataset(Dataset):
         if self.transforms is not None:
             target = self.target_transforms(target)
 
-        return input, target
+        return {"src": input, "tgt": target, "mode": self.mode}
 
     def _mask(
         self: Self, input: list[str], target: list[str]
@@ -178,11 +178,10 @@ class OpenWebTextDataset(Dataset):
             is_target = False
 
         # max length before special tokens
-        n -= (1 if is_target else 2)
-
+        n -= 1 if is_target else 2
 
         if len(tokens) > n:
-            tokens = tokens[:n] if is_target else tokens[-n:] 
+            tokens = tokens[:n] if is_target else tokens[-n:]
 
         num_pads = n - len(tokens)
 

@@ -116,3 +116,12 @@ class ModelManager:
         T.save(network.state_dict(), f"{self.model_dir}/model.pt")
         with open(self.model_dir / "info.json", "wt+") as f:
             json.dump(model_kwargs, f)
+
+    def clean(self: Self) -> None:
+        for checkpoint in self.checkpoint_dir.glob("*"):
+            checkpoint.unlink()
+        self.checkpoint_dir.rmdir()
+
+        for model in self.model_dir.glob("*"):
+            model.unlink()
+        self.model_dir.rmdir()

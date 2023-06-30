@@ -49,6 +49,20 @@ def prepare_dataloader(
     transforms: Callable = None,
     target_transforms: Callable = None,
 ) -> DataLoader:
+    def custom_collate_fn(data: list[dict]) -> dict:
+        out = {"src": [], "tgt": [], "mode": data[0]["mode"]}
+
+        for d in data:
+            out["src"].append(d["src"])
+            out["tgt"].append(d["tgt"])
+
+        convert_to_tensor = isinstance(data[0]["src"], T.Tensor)
+        if convert_to_tensor:
+            out["src"] = T.stack(out["src"])
+            out["tgt"] = T.stack(out["tgt"])
+
+        return out
+
     max_sentence_len = max_seq_len // 4
     max_passage_len = max_seq_len
 
@@ -73,8 +87,12 @@ def prepare_dataloader(
         sampler1 = None
         sampler2 = None
 
-    dataloader1 = DataLoader(dataset1, batch_size, sampler=sampler1)
-    dataloader2 = DataLoader(dataset2, batch_size, sampler=sampler2)
+    dataloader1 = DataLoader(
+        dataset1, batch_size, sampler=sampler1, collate_fn=custom_collate_fn
+    )
+    dataloader2 = DataLoader(
+        dataset2, batch_size, sampler=sampler2, collate_fn=custom_collate_fn
+    )
 
     dataloader = InterleavedDataLoader(dataloader1, dataloader2)
 
@@ -191,7 +209,7 @@ def training_loop(
         num_total = 0
         total_loss = 0
 
-        for batch_idx, (prompts, labels) in zip(
+        for batch_idx, batch in zip(
             range(1, len(dataloader) + 1),
             tqdm(
                 dataloader,
@@ -199,8 +217,11 @@ def training_loop(
                 disable=not is_main_process(rank, world_size),
             ),
         ):
+            inputs = batch["src"]
+            labels = batch["tgt"]
+            mode = batch["mode"]
             # no need to shift input / output by 1 when running a masking task
-            if dataloader.current_mode == Modes.Masking:
+            if mode == Modes.Masking:
                 labels_input = labels_expected = labels
             else:
                 labels_input = labels[:, :-1]
@@ -208,12 +229,12 @@ def training_loop(
 
             masks = {
                 "tgt_mask": make_look_ahead_mask(labels_input.size(-1), device),
-                "src_key_padding_mask": prompts == vocab.PAD_IDX,
+                "src_key_padding_mask": inputs == vocab.PAD_IDX,
                 "tgt_key_padding_mask": labels_input == vocab.PAD_IDX,
             }
 
             with amp.autocast(enabled=device.type == "cuda"):
-                y = network(prompts, labels_input, **masks)
+                y = network(inputs, labels_input, **masks)
 
                 loss = criterion(
                     y.view(-1, len(vocab)),
@@ -232,7 +253,7 @@ def training_loop(
                 scheduler.step()
 
             num_correct += T.sum(T.argmax(y, dim=-1) == labels_expected).item()
-            num_total += prompts.size(0) * prompts.size(1)
+            num_total += inputs.size(0) * inputs.size(1)
 
             if (
                 iteration != 0

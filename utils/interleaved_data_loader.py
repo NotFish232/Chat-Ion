@@ -8,20 +8,16 @@ class InterleavedDataLoader(DataLoader):
     def __init__(self: Self, *dataloaders: tuple[DataLoader]) -> None:
         self.dataloaders = dataloaders
         self.lengths = [len(d) for d in dataloaders]
-        self.iterators = [iter(d) for d in dataloaders]
 
         min_length = min(self.lengths)
         # how many to yield from each iterator before moving to next one
         self.counts = [length // min_length for length in self.lengths]
 
-    @property
-    def current_mode(self: Self) -> Modes:
-        return self.dataloaders[self.current_idx].dataset.mode
-
     def __len__(self: Self) -> int:
         return sum(self.lengths)
 
     def __iter__(self: Self) -> Iterator:
+        self.iterators = [iter(d) for d in self.dataloaders]
         self.current_idx = 0
         self.current_count = 0
         return self
