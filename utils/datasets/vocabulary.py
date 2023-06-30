@@ -1,6 +1,7 @@
 import json
 import string
 
+import nltk
 from nltk import corpus
 from transformers import BertTokenizer
 from typing_extensions import Self
@@ -52,6 +53,14 @@ class Vocabulary:
         self.token_to_idx = dict(zip(self.tokens, range(self.num_tokens)))
         self.idx_to_token = {v: k for k, v in self.token_to_idx.items()}
 
+        self.SOS_TOKEN = "<sos>"
+        self.EOS_TOKEN = "<eos>"
+        self.MASK_TOKEN = "<mask>"
+        self.OOV_TOKEN = "<oov>"
+        self.PAD_TOKEN = "<pad>"
+        self.CLS_TOKEN = "<cls>"
+        self.SEP_TOKEN = "<sep>"
+
         self.SOS_IDX = self.token_to_idx["<sos>"]
         self.EOS_IDX = self.token_to_idx["<eos>"]
         self.MASK_IDX = self.token_to_idx["<mask>"]
@@ -73,10 +82,48 @@ class Vocabulary:
             self.instance = super(Vocabulary, self).__new__(self)
         return self.instance
 
-    def tokenize(self: Self, sentence: str, to_idxs: bool = True) -> list[str | int]:
-        tokens = self.tokenizer.tokenize(sentence)
-        if to_idxs:
-            tokens = [self.token_to_idx.get(t, self.OOV_IDX) for t in tokens]
+    def tokenize(
+        self: Self,
+        sentence: str | list[str],
+        n: int,
+        add_sos_and_eos: bool = False,
+        add_cls_and_sep: bool = False,
+    ) -> list[int]:
+        assert not (
+            add_sos_and_eos and add_cls_and_sep
+        ), "Only one of add_sos_and_eos and add_cls_and_sep should be provided"
+        if isinstance(sentence, list):
+            assert add_cls_and_sep, "add_cls_and_sep must be true if sentence provided is a list of sentences"
+
+        if add_cls_and_sep:
+            tokens = []
+            for i, sent in enumerate(sentence):
+                tokens.extend(self.tokenizer.tokenize(sent))
+                if i != len(sent) - 1:
+                    tokens.append(self.SEP_TOKEN)
+        else:
+            tokens = self.tokenizer.tokenize(sentence)
+
+        if add_sos_and_eos or add_cls_and_sep:
+            max_length = n - 2
+        else:
+            max_length = n
+
+        if len(tokens) > max_length:
+            tokens = tokens[:max_length]
+
+        if add_sos_and_eos:
+            tokens.insert(0, self.SOS_TOKEN)
+            tokens.append(self.EOS_TOKEN)
+
+        if add_cls_and_sep:
+            tokens.insert(0, self.CLS_TOKEN)
+            tokens.append(self.SEP_TOKEN)
+
+        tokens.extend(self.PAD_TOKEN for _ in range(n - len(tokens)))
+
+        tokens = [self.token_to_idx.get(t, self.OOV_IDX) for t in tokens]
+
         return tokens
 
     def __len__(self: Self) -> int:
@@ -88,10 +135,10 @@ class Vocabulary:
         ), "Index passed must be of type str or int"
 
         if isinstance(word_or_idx, str):
-            return self.token_to_idx[word_or_idx]
+            return self.token_to_idx.get(word_or_idx, self.OOV_IDX)
 
         if isinstance(word_or_idx, int):
-            return self.idx_to_token[word_or_idx]
+            return self.idx_to_token.get(word_or_idx, self.OOV_TOKEN)
 
 
 if __name__ == "__main__":

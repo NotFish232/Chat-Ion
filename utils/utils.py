@@ -1,4 +1,5 @@
 import string
+from .datasets.vocabulary import Vocabulary, SPECIAL_TOKENS
 
 import torch as T
 
@@ -25,8 +26,12 @@ RIGHT_SPACE_PUNCTUATION = [".", ",", "?", "!", ";", ":", ")", "}", "]", "%"]
 TWO_SPACE_PUNCTUATION = ["@", "#", "^", "&", "*", "~", "+", "=", "<", ">"]
 
 
-def join_tokens(tokens: list[str], subword_start: str = "##") -> str:
-    s = " ".join(tokens) + " "
+def join_tokens(tokens: list[int | str], subword_start: str = "##") -> str:
+    if isinstance(tokens[0], int):
+        v = Vocabulary()
+        tokens = [v.idx_to_token.get(i, v.OOV_IDX) for i in tokens]
+
+    s = " ".join(token for token in tokens if token not in SPECIAL_TOKENS) + " "
     s = s.replace(" " + subword_start, "")
 
     for punct in string.punctuation:

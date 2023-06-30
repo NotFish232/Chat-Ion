@@ -28,9 +28,7 @@ class OpenWebTextDataset(Dataset):
         mode: Modes | str,
         folder_name: str = "openwebtext2",
         unprocessed_folder_name: str = "unprocessed",
-        processed_folder_name: str = "processed",
-        num_processed_files: int = 6,
-        info_file_name: str = "info.json",
+        processed_file_name: str = "processed.bin",
         max_sentence_length: int = 64,
         max_passage_length: int = 256,
         transforms: Callable = None,
@@ -40,11 +38,8 @@ class OpenWebTextDataset(Dataset):
             mode = Modes.__members__.get(mode)
         self.mode = mode
 
-        self.data_dir = DATA_DIR / folder_name
-        self.unprocessed_folder_name = unprocessed_folder_name
-        self.processed_folder_name = processed_folder_name
-        self.num_processed_files = num_processed_files
-        self.info_file_name = info_file_name
+        self.unprocessed_folder = DATA_DIR / folder_name / unprocessed_folder_name
+        self.processed_file = DATA_DIR / folder_name / processed_file_name
 
         self.max_sentence_length = max_sentence_length
         self.max_passage_length = max_passage_length
@@ -54,16 +49,11 @@ class OpenWebTextDataset(Dataset):
 
         self.vocab = Vocabulary()
 
-        self.unprocessed_files = list(
-            (self.data_dir / unprocessed_folder_name).glob("*.jsonl.zst")
-        )
+        self.unprocessed_files = list(self.unprocessed_folder.glob("*.jsonl.zst"))
 
-        if not (self.data_dir / self.info_file_name).exists():
+        if not self.processed_file.exists():
             self._process_data()
 
-        self.processed_files = list(
-            (self.data_dir / processed_folder_name).glob("*.zst")
-        )
 
         self.num_passages, self.num_sentences = self._read_info_file()
 
