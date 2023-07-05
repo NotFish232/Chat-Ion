@@ -1,21 +1,17 @@
 import io
-import itertools
 import json
 import multiprocessing as mp
 import random
 from typing import Callable, Iterator
-
-import nltk
+import numpy as np
 import zstandard as zstd
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from typing_extensions import Self
+from typing import Any
 
 from .shared import DATA_DIR, Modes
 from .vocabulary import Vocabulary
-
-
-PASSAGE_END = "### PASSAGE END ###"
 
 MASKING_PROB = 0.15
 RANDOM_WORD_PROB = 0.1
@@ -29,8 +25,10 @@ class OpenWebTextDataset(Dataset):
         folder_name: str = "openwebtext2",
         unprocessed_folder_name: str = "unprocessed",
         processed_file_name: str = "processed.bin",
-        max_sentence_length: int = 64,
-        max_passage_length: int = 256,
+        info_file_name: str = "info.json",
+        max_sentence_length: int = 256,
+        max_passage_length: int = 1024,
+        max_processed_length: int = 2048,
         transforms: Callable = None,
         target_transforms: Callable = None,
     ) -> None:
@@ -40,9 +38,11 @@ class OpenWebTextDataset(Dataset):
 
         self.unprocessed_folder = DATA_DIR / folder_name / unprocessed_folder_name
         self.processed_file = DATA_DIR / folder_name / processed_file_name
+        self.info_file = DATA_DIR / folder_name / info_file_name
 
         self.max_sentence_length = max_sentence_length
         self.max_passage_length = max_passage_length
+        self.max_processed_length = max_processed_length
 
         self.transforms = transforms
         self.target_transforms = target_transforms
@@ -54,78 +54,137 @@ class OpenWebTextDataset(Dataset):
         if not self.processed_file.exists():
             self._process_data()
 
+        self.num_passages = self._read_info_file()
 
-        self.num_passages, self.num_sentences = self._read_info_file()
-
-        self.current_idxs = [0 for _ in range(num_processed_files)]
-
-        self.sentence_generators = [
-            itertools.cycle(self._read_jsonl(f)) for f in self.processed_files
-        ]
+        self.data = np.memmap(
+            self.processed_file,
+            dtype=np.uint16,
+            mode="r",
+            shape=(self.num_passages, self.max_processed_length),
+        )
 
     def __len__(self: Self) -> int:
         return self.num_passages
 
-    """
-    supports arbitrary indexing, but in reality if you are using 
-    this you should definitely only retrieve sequentially
-    otherwise it's going to take way to long to get to an
-    arbitrary index in the dataset
-    """
+    def _make_sent_to_sent_task(
+        self: Self, passage: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        middle = len(passage) // 2
+        source = passage[:middle]
+        target = passage[middle:]
 
-    def __getitem__(self: Self, _idx: int) -> tuple:
-        bucket_idx = _idx % self.num_processed_files
-        sentence_generator = self.sentence_generators[bucket_idx]
-        idx = _idx // self.num_processed_files
-
-        while self.current_idxs[bucket_idx] != idx:
-            line = next(sentence_generator)
-
-            if line == PASSAGE_END:
-                self.current_idxs[bucket_idx] += 1
-
-            if self.current_idxs[bucket_idx] == self.__len__():
-                self.current_idxs[bucket_idx] = 0
-
-        passage = self._get_passage(sentence_generator)
-        self.current_idxs[bucket_idx] += 1
-        if self.current_idxs[bucket_idx] == self.__len__():
-            self.current_idxs[bucket_idx] = 0
-
-        input, target = (
-            (passage[0], passage[1])
-            if self.mode == Modes.SentToSent
-            else (passage[0], passage[1:])
-            if self.mode == Modes.SentToPass
-            else ("".join(passage[:-1]), passage[-1])
-            if self.mode == Modes.PassToSent
-            else (passage[: len(passage) // 2], passage[len(passage) // 2 :])
-            if self.mode == Modes.PassToPass
-            else (passage, passage)
-            if Modes.Masking
-            else (None, None)
+        source = self.vocab.fix_length(
+            source,
+            self.max_sentence_length,
+            add_cls_and_sep=True,
+            truncate_from_left=True,
+        )
+        target = self.vocab.fix_length(
+            target, self.max_sentence_length + 1, add_sos_and_eos=True
         )
 
-        if isinstance(input, list):
-            input = "".join(input)
-        if isinstance(target, list):
-            target = "".join(target)
+        return source, target
 
-        input = self.vocab.tokenize(input)
-        target = self.vocab.tokenize(target)
+    def _make_sent_to_pass_task(
+        self: Self, passage: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        middle = len(passage) // 2
+        source = passage[:middle]
+        target = passage[middle:]
 
-        input = self._pad_tokens(input, False)
-        target = self._pad_tokens(target)
+        source = self.vocab.fix_length(
+            source,
+            self.max_sentence_length,
+            add_cls_and_sep=True,
+            truncate_from_left=True,
+        )
+        target = self.vocab.fix_length(
+            target, self.max_passage_length + 1, add_sos_and_eos=True
+        )
 
-        if self.mode == Modes.Masking:
-            input, target = self._mask(input, target)
+        return source, target
+
+    def _make_pass_to_sent_task(
+        self: Self, passage: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        middle = len(passage) // 2
+        source = passage[:middle]
+        target = passage[middle:]
+
+        source = self.vocab.fix_length(
+            source,
+            self.max_passage_length,
+            add_cls_and_sep=True,
+            truncate_from_left=True,
+        )
+        target = self.vocab.fix_length(
+            target, self.max_sentence_length + 1, add_sos_and_eos=True
+        )
+
+        return source, target
+
+    def _make_pass_to_pass_task(
+        self: Self, passage: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        middle = len(passage) // 2
+        source = passage[:middle]
+        target = passage[middle:]
+
+        source = self.vocab.fix_length(
+            source,
+            self.max_passage_length,
+            add_cls_and_sep=True,
+            truncate_from_left=True,
+        )
+        target = self.vocab.fix_length(
+            target, self.max_passage_length + 1, add_sos_and_eos=True
+        )
+
+        return source, target
+
+    def _make_masking_task(self: Self, passage: list[int]) -> tuple[list[int]]:
+        source = self.vocab.fix_length(
+            passage, self.max_passage_length, add_cls_and_sep=True
+        )
+        target = [self.vocab.PAD_IDX for _ in range(self.max_passage_length)]
+        for idx in range(1, len(source)):
+            if source[idx] == self.vocab.SEP_IDX:
+                break
+
+            if random.random() <= MASKING_PROB:
+                prob = random.random()
+                target[idx] = source[idx]
+                if prob < RANDOM_WORD_PROB:
+                    source[idx] = random.randint(0, self.vocab.num_reg_tokens - 1)
+                elif prob < 1 - ACTUAL_WORD_PROB:
+                    source[idx] = self.vocab.MASK_IDX
+
+        return source, target
+
+    def __getitem__(self: Self, idx: int) -> tuple[Any, Any]:
+        passage = self.data[idx].tolist()
+
+        make_task_func = (
+            self._make_sent_to_sent_task
+            if self.mode == Modes.SentToSent
+            else self._make_sent_to_pass_task
+            if self.mode == Modes.SentToPass
+            else self._make_pass_to_sent_task
+            if self.mode == Modes.PassToSent
+            else self._make_pass_to_pass_task
+            if self.mode == Modes.PassToPass
+            else self._make_masking_task
+            if Modes.Masking
+            else None
+        )
+        source, target = make_task_func(passage)
 
         if self.transforms is not None:
-            input = self.transforms(input)
-        if self.transforms is not None:
+            source = self.transforms(source)
+        if self.target_transforms is not None:
             target = self.target_transforms(target)
 
-        return {"src": input, "tgt": target, "mode": self.mode}
+        return {"src": source, "tgt": target, "mode": self.mode}
 
     def _mask(
         self: Self, input: list[str], target: list[str]
@@ -146,119 +205,60 @@ class OpenWebTextDataset(Dataset):
 
         return input, target
 
-    def _get_passage(self: Self, sentence_generator: Iterator[str]) -> list[str]:
-        passage = []
-        while True:
-            line = next(sentence_generator)
-            if line == PASSAGE_END:
-                break
-            passage.append(line)
-        return passage
-
-    def _pad_tokens(self: Self, tokens: list[int], is_target: bool = True) -> list[int]:
-        n = (
-            self.max_sentence_length
-            if self.mode == Modes.SentToSent
-            or (is_target and self.mode == Modes.PassToSent)
-            or (not is_target and self.mode == Modes.SentToPass)
-            else self.max_passage_length
-        )
-
-        if self.mode == Modes.Masking:
-            is_target = False
-
-        # max length before special tokens
-        n -= 1 if is_target else 2
-
-        if len(tokens) > n:
-            tokens = tokens[:n] if is_target else tokens[-n:]
-
-        num_pads = n - len(tokens)
-
-        if is_target:
-            tokens.insert(0, self.vocab.SOS_IDX)
-            tokens.append(self.vocab.EOS_IDX)
-        else:
-            tokens.insert(0, self.vocab.CLS_IDX)
-            tokens.append(self.vocab.SEP_IDX)
-
-        tokens.extend(self.vocab.PAD_IDX for _ in range(num_pads))
-
-        return tokens
-
-    @staticmethod
-    def _read_jsonl(file_path: str) -> Iterator[str]:
+    def _read_jsonl(self: Self, file_path: str) -> Iterator[str]:
         zstd_ctx = zstd.ZstdDecompressor()
         with open(file_path, "rb") as f:
             reader = io.BufferedReader(zstd_ctx.stream_reader(f))
             for line in reader:
-                yield json.loads(line)
+                yield json.loads(line)["text"]
 
-    def _tokenize_passage(self: Self, passage: str) -> list[str]:
-        return nltk.sent_tokenize(passage)
-
-    def _process_file(self: Self, file: str) -> dict:
+    def _process_file(self: Self, file: str) -> list[int]:
         passages = []
-
         for passage in self._read_jsonl(file):
-            sentences = self._tokenize_passage(passage["text"])
-            sentences.append(PASSAGE_END)
-            passages.append(sentences)
-
+            passage_tokens = self.vocab.tokenize(passage, self.max_processed_length)
+            passages.append(passage_tokens)
+        passages = np.array(passages, dtype=np.uint16)
         return passages
 
     def _process_data(self: Self) -> dict:
-        passages = []
+        num_passages = 0
+        for file in tqdm(self.unprocessed_files, desc=f"Finding length"):
+            for _ in self._read_jsonl(file):
+                num_passages += 1
 
-        num_processes = 64
-        compressor = zstd.ZstdCompressor()
-
+        array = np.memmap(
+            filename=self.processed_file,
+            mode="w+",
+            dtype=np.uint16,
+            shape=(num_passages, self.max_processed_length),
+        )
+        """
+        num_processes = 8
         with mp.Pool(num_processes) as p:
             m = p.imap(self._process_file, self.unprocessed_files)
+            progress_bar = tqdm(
+                m, total=len(self.unprocessed_files), desc="Processing data.."
+            )
+            idx = 0
+            for passages in progress_bar:
+                array[idx : idx + len(passages)] = passages
+                idx += len(passages)
+        """
+        idx = 0
+        for file in tqdm(self.unprocessed_files, desc=f"Writing passages"):
+            new_passages = self._process_file(file)
+            array[idx : idx + len(new_passages)] = new_passages
+            idx += len(new_passages)
+        array.flush()
 
-            for r in tqdm(
-                m, total=len(self.unprocessed_files), desc="reading unprocessed..."
-            ):
-                passages.extend(r)
-
-        num = len(passages) // self.num_processed_files
-
-        info_json = []
-
-        for n in tqdm(range(self.num_processed_files), desc="writing processed..."):
-            with (
-                open(
-                    self.data_dir / self.processed_folder_name / f"{n}.zst", "wb+"
-                ) as f,
-                compressor.stream_writer(f) as compressed_writer,
-            ):
-                num_passages = 0
-                num_sentences = 0
-                for idx in range(n * num, (n + 1) * num):
-                    for sentence in passages[idx]:
-                        compressed_writer.write(json.dumps(sentence).encode() + b"\n")
-                        num_sentences += 1
-                    num_passages += 1
-
-                info_json.append(
-                    {"num_passages": num_passages, "num_sentences": num_sentences}
-                )
-
-        with open(self.data_dir / self.info_file_name, "w+") as f:
-            json.dump(info_json, f)
+        with open(self.info_file, "w+") as f:
+            f.write(json.dumps({"num_passages": len(array)}))
 
     def _read_info_file(self: Self) -> tuple:
-        with open(self.data_dir / self.info_file_name, "r") as f:
+        with open(self.info_file, "r") as f:
             data = json.load(f)
 
-        total_passages = 0
-        total_sentences = 0
-
-        for d in data:
-            total_passages += d["num_passages"]
-            total_sentences += d["num_sentences"]
-
-        return total_passages, total_sentences
+        return data["num_passages"]
 
 
 if __name__ == "__main__":

@@ -61,13 +61,13 @@ class Vocabulary:
         self.CLS_TOKEN = "<cls>"
         self.SEP_TOKEN = "<sep>"
 
-        self.SOS_IDX = self.token_to_idx["<sos>"]
-        self.EOS_IDX = self.token_to_idx["<eos>"]
-        self.MASK_IDX = self.token_to_idx["<mask>"]
-        self.OOV_IDX = self.token_to_idx["<oov>"]
-        self.PAD_IDX = self.token_to_idx["<pad>"]
-        self.CLS_IDX = self.token_to_idx["<cls>"]
-        self.SEP_IDX = self.token_to_idx["<sep>"]
+        self.SOS_IDX = self.token_to_idx[self.SOS_TOKEN]
+        self.EOS_IDX = self.token_to_idx[self.EOS_TOKEN]
+        self.MASK_IDX = self.token_to_idx[self.MASK_TOKEN]
+        self.OOV_IDX = self.token_to_idx[self.OOV_TOKEN]
+        self.PAD_IDX = self.token_to_idx[self.PAD_TOKEN]
+        self.CLS_IDX = self.token_to_idx[self.CLS_TOKEN]
+        self.SEP_IDX = self.token_to_idx[self.SEP_TOKEN]
 
     @property
     def num_tokens(self: Self) -> int:
@@ -82,20 +82,57 @@ class Vocabulary:
             self.instance = super(Vocabulary, self).__new__(self)
         return self.instance
 
-    def tokenize(
+    def fix_length(
         self: Self,
-        sentence: str | list[str],
+        tokens: list[int],
         n: int,
         add_sos_and_eos: bool = False,
         add_cls_and_sep: bool = False,
+        truncate_from_left: bool = False,
+    ) -> list[int]:
+        if n == -1:
+            return tokens
+
+        if add_sos_and_eos or add_cls_and_sep:
+            max_length = n - 2
+        else:
+            max_length = n
+
+        if len(tokens) > max_length:
+            tokens = tokens[-max_length:] if truncate_from_left else tokens[:max_length]
+
+        if add_sos_and_eos:
+            tokens.insert(0, self.SOS_IDX)
+            tokens.append(self.EOS_IDX)
+
+        if add_cls_and_sep:
+            tokens.insert(0, self.CLS_IDX)
+            tokens.append(self.SEP_IDX)
+
+        tokens.extend(self.PAD_IDX for _ in range(n - len(tokens)))
+
+        return tokens
+
+    """
+    tokenizes a sentence or list of sentences,
+    converts to indexes, and fixes length to n
+    """
+
+    def tokenize(
+        self: Self,
+        sentence: str | list[str],
+        n: int = -1,
+        add_sos_and_eos: bool = False,
+        add_cls_and_sep: bool = False,
+        truncate_from_left: bool = False,
     ) -> list[int]:
         assert not (
             add_sos_and_eos and add_cls_and_sep
         ), "Only one of add_sos_and_eos and add_cls_and_sep should be provided"
         if isinstance(sentence, list):
-            assert add_cls_and_sep, "add_cls_and_sep must be true if sentence provided is a list of sentences"
-
-        if add_cls_and_sep:
+            assert (
+                add_cls_and_sep
+            ), "add_cls_and_sep must be true if sentence provided is a list of sentences"
             tokens = []
             for i, sent in enumerate(sentence):
                 tokens.extend(self.tokenizer.tokenize(sent))
@@ -104,25 +141,15 @@ class Vocabulary:
         else:
             tokens = self.tokenizer.tokenize(sentence)
 
-        if add_sos_and_eos or add_cls_and_sep:
-            max_length = n - 2
-        else:
-            max_length = n
-
-        if len(tokens) > max_length:
-            tokens = tokens[:max_length]
-
-        if add_sos_and_eos:
-            tokens.insert(0, self.SOS_TOKEN)
-            tokens.append(self.EOS_TOKEN)
-
-        if add_cls_and_sep:
-            tokens.insert(0, self.CLS_TOKEN)
-            tokens.append(self.SEP_TOKEN)
-
-        tokens.extend(self.PAD_TOKEN for _ in range(n - len(tokens)))
-
         tokens = [self.token_to_idx.get(t, self.OOV_IDX) for t in tokens]
+
+        tokens = self.fix_length(
+            tokens,
+            n,
+            add_sos_and_eos,
+            add_cls_and_sep,
+            truncate_from_left,
+        )
 
         return tokens
 

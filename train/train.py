@@ -49,19 +49,23 @@ def prepare_dataloader(
     transforms: Callable = None,
     target_transforms: Callable = None,
 ) -> DataLoader:
-    def custom_collate_fn(data: list[dict]) -> dict:
-        out = {"src": [], "tgt": [], "mode": data[0]["mode"]}
+    def custom_collate_fn(batch: list[dict]) -> dict:
+        batch_dict = {}
 
-        for d in data:
-            out["src"].append(d["src"])
-            out["tgt"].append(d["tgt"])
+        for data in batch:
+            for key, val in data.items():
+                if isinstance(val, (list, tuple, T.Tensor)):
+                    if key not in batch_dict:
+                        batch_dict[key] = []
+                    batch_dict[key].append(val)
+                else:
+                    batch_dict[key] = val
 
-        convert_to_tensor = isinstance(data[0]["src"], T.Tensor)
-        if convert_to_tensor:
-            out["src"] = T.stack(out["src"])
-            out["tgt"] = T.stack(out["tgt"])
+        for key, val in batch[0].items():
+            if isinstance(val, T.Tensor):
+                batch_dict[key] = T.stack(batch_dict[key])
 
-        return out
+        return batch_dict
 
     max_sentence_len = max_seq_len // 4
     max_passage_len = max_seq_len
@@ -217,28 +221,28 @@ def training_loop(
                 disable=not is_main_process(rank, world_size),
             ),
         ):
-            inputs = batch["src"]
-            labels = batch["tgt"]
+            source = batch["src"]
+            target = batch["tgt"]
             mode = batch["mode"]
-            # no need to shift input / output by 1 when running a masking task
+            # no need to shift output by 1 when running a masking task
             if mode == Modes.Masking:
-                labels_input = labels_expected = labels
+                target_input = target_expected = target
             else:
-                labels_input = labels[:, :-1]
-                labels_expected = labels[:, 1:]
+                target_input = target[:, :-1]
+                target_expected = target[:, 1:]
 
             masks = {
-                "tgt_mask": make_look_ahead_mask(labels_input.size(-1), device),
-                "src_key_padding_mask": inputs == vocab.PAD_IDX,
-                "tgt_key_padding_mask": labels_input == vocab.PAD_IDX,
+                "tgt_mask": make_look_ahead_mask(target_input.size(-1), device),
+                "src_key_padding_mask": source == vocab.PAD_IDX,
+                "tgt_key_padding_mask": target_input == vocab.PAD_IDX,
             }
 
             with amp.autocast(enabled=device.type == "cuda"):
-                y = network(inputs, labels_input, **masks)
+                y = network(source, target_input, **masks)
 
                 loss = criterion(
                     y.view(-1, len(vocab)),
-                    labels_expected.flatten(),
+                    target_expected.flatten(),
                 )
 
             total_loss += loss.item()
@@ -252,8 +256,8 @@ def training_loop(
                 optimizer.zero_grad()
                 scheduler.step()
 
-            num_correct += T.sum(T.argmax(y, dim=-1) == labels_expected).item()
-            num_total += inputs.size(0) * inputs.size(1)
+            num_correct += T.sum(T.argmax(y, dim=-1) == target_expected).item()
+            num_total += source.size(0) * source.size(1)
 
             if (
                 iteration != 0
