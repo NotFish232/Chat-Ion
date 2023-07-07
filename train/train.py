@@ -34,7 +34,7 @@ def cleanup_distributed() -> None:
 
 
 def is_main_process(rank: int, world_size: int) -> bool:
-    return (rank == -1 and world_size == -1) or (rank == 0 and world_size > 0)
+    return not is_multi_gpu(rank, world_size) or rank == 0
 
 
 def is_multi_gpu(rank: int, world_size: int) -> bool:
@@ -156,6 +156,16 @@ def prepare_logger(rank: int, world_size: int) -> logging.Logger:
     return logger
 
 
+def calc_accuracy(y_hat: T.Tensor, y: T.Tensor, ignore_idx: int) -> tuple[int, int]:
+    mask = y != ignore_idx
+    y_hat = y_hat[mask]
+    y = y[mask]
+    num_correct = T.sum(y_hat == y).item()
+    num_total = y.numel()
+
+    return num_correct, num_total
+
+
 def training_loop(
     model_name: str,
     epochs: int,
@@ -256,17 +266,22 @@ def training_loop(
                 optimizer.zero_grad()
                 scheduler.step()
 
-            num_correct += T.sum(T.argmax(y, dim=-1) == target_expected).item()
-            num_total += source.size(0) * source.size(1)
+            target_predicted = T.argmax(y, dim=-1)
+            nc, nt = calc_accuracy(target_predicted, target_expected, vocab.PAD_IDX)
+            num_correct += nc
+            num_total += nt
 
             if (
                 iteration != 0
                 and iteration % checkpoint_interval == 0
                 and is_main_process(rank, world_size)
             ):
-                logger.info("Saving checkpoint...")
                 accuracy = num_correct / num_total
-                model_mgr.save_checkpoint(network, optimizer, scheduler, scaler, epoch)
+                logger.info("Saving checkpoint...")
+                logger.info(f"Accuracy: {accuracy:.2%}")
+                model_mgr.save_checkpoint(
+                    network, optimizer, scheduler, scaler, epoch, accuracy
+                )
 
             iteration += 1
 
@@ -277,7 +292,9 @@ def training_loop(
 
     if is_main_process(rank, world_size):
         logger.info("Making final checkpoint and saving model...")
-        model_mgr.save_checkpoint(network, optimizer, scheduler, scaler, epoch)
+        model_mgr.save_checkpoint(
+            network, optimizer, scheduler, scaler, epoch, accuracy
+        )
         model_mgr.save_model(network, model_kwargs)
 
     cleanup_distributed()

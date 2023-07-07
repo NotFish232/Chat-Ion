@@ -75,7 +75,7 @@ class ModelManager:
         checkpoints = list(self.checkpoint_dir.glob("*.pt"))
 
         most_recent_checkpoint = max(checkpoints, key=lambda x: x.stem.split("-")[-1])
-        most_recent_checkpoint = T.load(most_recent_checkpoint)
+        most_recent_checkpoint = T.load(most_recent_checkpoint, map_location="cpu")
 
         return_values = []
         arg_idx = 0
