@@ -8,14 +8,6 @@ from typing_extensions import Self
 
 BASE_DIR = Path(__file__).parents[1]
 
-DEFAULT_SAVE_KEYS = [
-    "network",
-    "optimizer",
-    "scheduler",
-    "scaler",
-    "accuracy",
-    "epochs",
-]
 
 MODULE_REGEX = re.compile("module.")
 
@@ -24,13 +16,11 @@ class ModelManager:
     def __init__(
         self: Self,
         model_name: str,
-        save_keys: list[str] = DEFAULT_SAVE_KEYS,
         max_num_checkpoints: int = 3,
         checkpoint_dir: str = "checkpoints",
         model_dir: str = "trained_models",
     ) -> None:
         self.model_name = model_name
-        self.save_keys = save_keys
         self.max_num_checkpoints = max_num_checkpoints
         self.checkpoint_dir = BASE_DIR / checkpoint_dir / model_name
         self.model_dir = BASE_DIR / model_dir / model_name
@@ -68,34 +58,17 @@ class ModelManager:
 
         model.load_state_dict(state_dict)
 
-    def load_checkpoint(self: Self, *args: tuple) -> tuple:
+    def load_checkpoint(self: Self) -> dict:
         if not self.checkpoint_exists():
             return None
 
         checkpoints = list(self.checkpoint_dir.glob("*.pt"))
 
         most_recent_checkpoint = max(checkpoints, key=lambda x: x.stem.split("-")[-1])
-        most_recent_checkpoint = T.load(most_recent_checkpoint, map_location="cpu")
 
-        return_values = []
-        arg_idx = 0
-        for value in most_recent_checkpoint.values():
-            if isinstance(value, dict):
-                args[arg_idx].load_state_dict(value)
-                arg_idx += 1
-            else:
-                return_values.append(value)
+        return T.load(most_recent_checkpoint, map_location="cpu")
 
-        return tuple(return_values)
-
-    def save_checkpoint(self: Self, *args: tuple) -> None:
-        checkpoint_dict = {}
-        for key, value in zip(self.save_keys, args):
-            if hasattr(value, "state_dict"):
-                checkpoint_dict[key] = value.state_dict()
-            else:
-                checkpoint_dict[key] = value
-
+    def save_checkpoint(self: Self, checkpoint_dict: dict) -> None:
         checkpoints = list(self.checkpoint_dir.glob("*.pt"))
         checkpoint_num = len(checkpoints) + 1
 

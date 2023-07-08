@@ -124,10 +124,14 @@ def prepare_optimizer(
     decay_params = []
     no_decay_params = []
     for param in network.parameters():
+        if not param.requires_grad:
+            continue
+
         if param.dim() >= 2:
             decay_params.append(param)
         else:
             no_decay_params.append(param)
+
     optimizer_params = [
         {"params": decay_params, "weight_decay": weight_decay},
         {"params": no_decay_params, "weight_decay": 0},
@@ -156,14 +160,14 @@ def prepare_logger(rank: int, world_size: int) -> logging.Logger:
     return logger
 
 
-def calc_accuracy(y_hat: T.Tensor, y: T.Tensor, ignore_idx: int) -> tuple[int, int]:
+def calc_accuracy(y_hat: T.Tensor, y: T.Tensor, ignore_idx: int) -> int:
     mask = y != ignore_idx
     y_hat = y_hat[mask]
     y = y[mask]
     num_correct = T.sum(y_hat == y).item()
     num_total = y.numel()
 
-    return num_correct, num_total
+    return num_correct / num_total
 
 
 def training_loop(
@@ -181,6 +185,7 @@ def training_loop(
     world_size: int = -1,
 ) -> None:
     logger = prepare_logger(rank, world_size)
+    is_main = is_main_process(rank, world_size)
 
     device = T.device(f"cuda:{rank}" if is_multi_gpu(rank, world_size) else device)
 
@@ -211,25 +216,22 @@ def training_loop(
 
     if model_mgr.checkpoint_exists():
         logger.info("Checkpoint exists, loading save!")
-        checkpoint = model_mgr.load_checkpoint(network, optimizer, scheduler, scaler)
-        (starting_epochs,) = checkpoint
+        checkpoint = model_mgr.load_checkpoint()
+        network.load_state_dict(checkpoint["network"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        scheduler.load_state_dict(checkpoint["scheduler"])
+        scaler.load_state_dict(checkpoint["scaler"])
+        starting_epochs = checkpoint["epochs"]
     else:
         logger.info("Checkpoint doesn't exist, creating new model.")
         starting_epochs = 0
 
     iteration = 0
     for epoch in range(starting_epochs + 1, starting_epochs + epochs + 1):
-        num_correct = 0
-        num_total = 0
-        total_loss = 0
-
-        for batch_idx, batch in zip(
-            range(1, len(dataloader) + 1),
-            tqdm(
-                dataloader,
-                desc=f"Epoch {epoch}",
-                disable=not is_main_process(rank, world_size),
-            ),
+        for batch in tqdm(
+            dataloader,
+            desc=f"Epoch {epoch}",
+            disable=not is_main,
         ):
             source = batch["src"]
             target = batch["tgt"]
@@ -255,46 +257,48 @@ def training_loop(
                     target_expected.flatten(),
                 )
 
-            total_loss += loss.item()
-
             loss /= grad_acc_steps
             scaler.scale(loss).backward()
 
-            if batch_idx % grad_acc_steps == 0 or batch_idx == len(dataloader):
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad()
-                scheduler.step()
-
-            target_predicted = T.argmax(y, dim=-1)
-            nc, nt = calc_accuracy(target_predicted, target_expected, vocab.PAD_IDX)
-            num_correct += nc
-            num_total += nt
-
-            if (
-                iteration != 0
-                and iteration % checkpoint_interval == 0
-                and is_main_process(rank, world_size)
-            ):
-                accuracy = num_correct / num_total
-                logger.info("Saving checkpoint...")
-                logger.info(f"Accuracy: {accuracy:.2%}")
-                model_mgr.save_checkpoint(
-                    network, optimizer, scheduler, scaler, epoch, accuracy
-                )
-
             iteration += 1
 
-        avg_loss = total_loss / len(dataloader)
+            if iteration % grad_acc_steps == 0:
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+                scheduler.step()
 
-        accuracy = num_correct / num_total
-        logger.info(f"Accuracy: {accuracy:.2%}, loss: {avg_loss:.2f}")
+            if iteration % checkpoint_interval == 0 and is_main:
+                target_pred = T.argmax(y, dim=-1)
+                accuracy = calc_accuracy(target_pred, target_expected, vocab.PAD_IDX)
+                logger.info("Saving checkpoint...")
+                logger.info(f"Accuracy: {accuracy:.2%}")
+                checkpoint = {
+                    "network": network.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "scheduler": scheduler.state_dict(),
+                    "scaler": scaler.state_dict(),
+                    "epochs": epoch,
+                }
+                model_mgr.save_checkpoint(checkpoint)
 
-    if is_main_process(rank, world_size):
+    # step optimizer with final gradients
+    if iteration % grad_acc_steps != 0:
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad(set_to_none=True)
+        scheduler.step()
+
+    if is_main:
         logger.info("Making final checkpoint and saving model...")
-        model_mgr.save_checkpoint(
-            network, optimizer, scheduler, scaler, epoch, accuracy
-        )
+        checkpoint = {
+            "network": network.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "scaler": scaler.state_dict(),
+            "epochs": epoch,
+        }
+        model_mgr.save_checkpoint(checkpoint)
         model_mgr.save_model(network, model_kwargs)
 
     cleanup_distributed()
