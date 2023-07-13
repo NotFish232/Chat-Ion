@@ -5,7 +5,7 @@ import torch as T
 import random
 import math
 
-
+# FIXME: WIP
 class MultiheadLSHAttention(nn.Module):
     def __init__(
         self: Self, embed_dim: int, num_heads: int = 8, num_hashes: int = 8

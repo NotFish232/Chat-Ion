@@ -46,6 +46,10 @@ class Transformer(nn.Module):
         src += self.positional_encoding(src)
         tgt += self.positional_encoding(tgt)
 
+        # TODO: FIXME
+        del kwargs["src_key_padding_mask"] 
+        del kwargs["tgt_key_padding_mask"]
+
         x = self.transformer(src, tgt, **kwargs)
 
         x = self.linear(x)

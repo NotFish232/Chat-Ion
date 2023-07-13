@@ -24,7 +24,6 @@ class InterleavedDataLoader(DataLoader):
 
     def __next__(self: Self) -> Any:
         if all(i is None for i in self.iterators):
-            self.iterators = [iter(d) for d in self.dataloaders]
             raise StopIteration()
 
         while self.iterators[self.current_idx] is None:

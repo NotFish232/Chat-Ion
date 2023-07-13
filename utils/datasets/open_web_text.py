@@ -150,9 +150,10 @@ class OpenWebTextDataset(Dataset):
         for idx in range(1, len(source)):
             if source[idx] == self.vocab.SEP_IDX:
                 break
-
-            if random.random() <= MASKING_PROB:
-                prob = random.random()
+            
+            prob = random.random()
+            if prob <= MASKING_PROB:
+                prob /= MASKING_PROB
                 target[idx] = source[idx]
                 if prob < RANDOM_WORD_PROB:
                     source[idx] = random.randint(0, self.vocab.num_reg_tokens - 1)

@@ -5,15 +5,11 @@ import torch as T
 
 
 def make_look_ahead_mask(n: int, device: T.device) -> T.Tensor:
-    return T.triu(
-        T.ones(
-            n,
-            n,
-            dtype=T.bool,
-            device=device,
-        ),
-        diagonal=1,
-    )
+    return T.triu(T.full((n, n), float("-inf"), device=device), diagonal=1)
+
+
+def make_padding_mask(x: T.Tensor, pad_idx: int, e: float = float("-inf")) -> T.Tensor:
+    return T.where(x == pad_idx, e, 0.0)
 
 
 # should not insert space on left or right
@@ -27,11 +23,13 @@ TWO_SPACE_PUNCTUATION = ["@", "#", "^", "&", "*", "~", "+", "=", "<", ">"]
 
 
 def join_tokens(tokens: list[int | str], subword_start: str = "##") -> str:
+    if isinstance(tokens, T.Tensor):
+        tokens = tokens.tolist()
     if isinstance(tokens[0], int):
         v = Vocabulary()
         tokens = [v.idx_to_token.get(i, v.OOV_IDX) for i in tokens]
 
-    s = " ".join(token for token in tokens if token not in SPECIAL_TOKENS) + " "
+    s = " ".join(tokens) + " "
     s = s.replace(" " + subword_start, "")
 
     for punct in string.punctuation:

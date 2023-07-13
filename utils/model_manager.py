@@ -45,7 +45,7 @@ class ModelManager:
             info = json.load(f)
         return info
 
-    def load_model(self: Self, model: nn.Module) -> None:
+    def load_model(self: Self) -> dict:
         if not self.model_exists():
             return
 
@@ -56,7 +56,7 @@ class ModelManager:
         for key, value in _state_dict.items():
             state_dict[re.sub(MODULE_REGEX, "", key)] = value
 
-        model.load_state_dict(state_dict)
+        return state_dict
 
     def load_checkpoint(self: Self) -> dict:
         if not self.checkpoint_exists():
