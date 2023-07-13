@@ -1,4 +1,5 @@
 torch
+torchview
 torchvision
 tqdm
 argparse

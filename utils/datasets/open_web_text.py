@@ -164,6 +164,8 @@ class OpenWebTextDataset(Dataset):
 
     def __getitem__(self: Self, idx: int) -> tuple[Any, Any]:
         passage = self.data[idx].tolist()
+        if self.vocab.PAD_IDX in passage:
+            passage = passage[:passage.index(self.vocab.PAD_IDX)]
 
         make_task_func = (
             self._make_sent_to_sent_task
@@ -186,26 +188,7 @@ class OpenWebTextDataset(Dataset):
             target = self.target_transforms(target)
 
         return {"src": source, "tgt": target, "mode": self.mode}
-
-    def _mask(
-        self: Self, input: list[str], target: list[str]
-    ) -> tuple[list[int], list[int]]:
-        # don't mask cls or sep tokens
-        for idx in range(1, len(input) - 1):
-            if input[idx] == self.vocab.PAD_IDX:
-                break
-
-            if random.random() <= MASKING_PROB:
-                prob = random.random()
-                if prob < RANDOM_WORD_PROB:
-                    input[idx] = random.randint(0, self.vocab.num_reg_tokens - 1)
-                elif prob < 1 - ACTUAL_WORD_PROB:
-                    input[idx] = self.vocab.MASK_IDX
-            else:
-                target[idx] = self.vocab.PAD_IDX
-
-        return input, target
-
+    
     def _read_jsonl(self: Self, file_path: str) -> Iterator[str]:
         zstd_ctx = zstd.ZstdDecompressor()
         with open(file_path, "rb") as f:

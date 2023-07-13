@@ -17,7 +17,7 @@ def run_evaluation(model_name: str, device: str) -> None:
 
     model_kwargs = model_mgr.load_model_info()
     network = Transformer(len(vocab), **model_kwargs).to(device)
-    model_mgr.load_model(network)
+    network.load_state_dict(model_mgr.load_model())
 
     max_seq_len = model_kwargs["max_seq_len"]
 
@@ -26,33 +26,42 @@ def run_evaluation(model_name: str, device: str) -> None:
     user_input = ""
     network.eval()
     with T.no_grad():
-        while user_input != "goodbye":
-            user_input = input(">> ").lower()
-            sentence = [vocab.CLS_IDX] + vocab.tokenize(user_input)
-            sentence.extend(vocab.PAD_IDX for _ in range(max_seq_len - len(sentence)))
-            sentence = T.tensor(sentence, device=device).unsqueeze(0)
+        while user_input.lower() != "quit":
+            user_input = input(">> ")
+            sentence_parts = user_input.split(" ? ")  # '?' should be predicted by model
+            tokens = []
+            for i, part in enumerate(sentence_parts):
+                if i != 0:
+                    tokens.append(vocab.MASK_IDX)
+                new_tokens = vocab.tokenize(part)
+                tokens.extend(new_tokens)
+            tokens = vocab.fix_length(tokens, max_seq_len, add_cls_and_sep=True)
+            masked_idxs = [i for i, t in enumerate(tokens) if t == vocab.MASK_IDX]
+            sentence = T.tensor(tokens, device=device).unsqueeze(0)
 
-            tgt = T.full((1, max_seq_len + 1), vocab.PAD_IDX, device=device)
-            tgt[0, 0] = vocab.SOS_IDX
+            tgt = T.full((1, max_seq_len), vocab.PAD_IDX, device=device)
 
-            for t in range(1, tgt.size(-1)):
-                tgt_input = tgt[:, :-1]
+            for t in range(tgt.size(1)):
+                if t not in masked_idxs:
+                    continue
+
                 masks = {
                     "tgt_mask": look_ahead_mask,
                     "src_key_padding_mask": sentence == vocab.PAD_IDX,
-                    "tgt_key_padding_mask": tgt_input == vocab.PAD_IDX,
+                    "tgt_key_padding_mask": tgt == vocab.PAD_IDX,
                 }
-                y = network(sentence, tgt_input, **masks)
+                y = network(sentence, tgt, **masks)
 
-                response = T.argmax(y[0, t - 1])
+                response = T.argmax(y[0, t])
                 tgt[0, t] = response
 
-                if response.item() == vocab.EOS_IDX:
-                    break
 
-                print(vocab.idx_to_token[response.item()], end=" ")
-
-            print()
+            output = ""
+            for i, part in enumerate(sentence_parts):
+                output += part
+                if i != len(sentence_parts) - 1:
+                    output += f" {vocab[tgt[0, masked_idxs[i]].item()]} "
+            print(output)
 
 
 def main() -> None:
