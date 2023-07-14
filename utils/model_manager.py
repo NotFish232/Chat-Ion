@@ -69,16 +69,17 @@ class ModelManager:
         return T.load(most_recent_checkpoint, map_location="cpu")
 
     def save_checkpoint(self: Self, checkpoint_dict: dict) -> None:
-        checkpoints = list(self.checkpoint_dir.glob("*.pt"))
+        checkpoints = sorted(self.checkpoint_dir.glob("*.pt"))
         checkpoint_num = len(checkpoints) + 1
 
-        if checkpoint_num > self.max_num_checkpoints:
+        while checkpoint_num > self.max_num_checkpoints:
             checkpoints.pop(0).unlink()
-
-            for idx, checkpoint in enumerate(checkpoints):
-                checkpoint.rename(self.checkpoint_dir / f"checkpoint-{idx + 1}.pt")
-
             checkpoint_num -= 1
+
+        for idx, checkpoint in enumerate(checkpoints):
+            new_name = f"checkpoint-{idx + 1}.pt"
+            if checkpoint.name != new_name:
+                checkpoint.rename(self.checkpoint_dir / new_name)
 
         T.save(
             checkpoint_dict,
@@ -93,8 +94,6 @@ class ModelManager:
     def clean(self: Self) -> None:
         for checkpoint in self.checkpoint_dir.glob("*"):
             checkpoint.unlink()
-        self.checkpoint_dir.rmdir()
 
         for model in self.model_dir.glob("*"):
             model.unlink()
-        self.model_dir.rmdir()
