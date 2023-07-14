@@ -81,7 +81,7 @@ class CornellMovieDataset(Dataset):
         if self.target_transforms is not None:
             answer = self.target_transforms(answer)
 
-        return {"src": question, "tgt": answer, "mode": self.mode}
+        return question, answer
 
     def _load_data(self: Self) -> list[dict]:
         with open(self.data_dir / self.processed_file_name, "r") as f:

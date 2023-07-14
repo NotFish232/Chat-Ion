@@ -49,24 +49,6 @@ def prepare_dataloader(
     transforms: Callable = None,
     target_transforms: Callable = None,
 ) -> DataLoader:
-    def custom_collate_fn(batch: list[dict]) -> dict:
-        batch_dict = {}
-
-        for data in batch:
-            for key, val in data.items():
-                if isinstance(val, (list, tuple, T.Tensor)):
-                    if key not in batch_dict:
-                        batch_dict[key] = []
-                    batch_dict[key].append(val)
-                else:
-                    batch_dict[key] = val
-
-        for key, val in batch[0].items():
-            if isinstance(val, T.Tensor):
-                batch_dict[key] = T.stack(batch_dict[key])
-
-        return batch_dict
-
     max_sentence_len = max_seq_len // 4
     max_passage_len = max_seq_len
 
@@ -91,12 +73,8 @@ def prepare_dataloader(
         sampler1 = None
         sampler2 = None
 
-    dataloader1 = DataLoader(
-        dataset1, batch_size, sampler=sampler1, collate_fn=custom_collate_fn
-    )
-    dataloader2 = DataLoader(
-        dataset2, batch_size, sampler=sampler2, collate_fn=custom_collate_fn
-    )
+    dataloader1 = DataLoader(dataset1, batch_size, sampler=sampler1)
+    dataloader2 = DataLoader(dataset2, batch_size, sampler=sampler2)
 
     dataloader = InterleavedDataLoader(dataloader1, dataloader2)
 
@@ -233,18 +211,13 @@ def training_loop(
             desc=f"Epoch {epoch}",
             disable=not is_main,
         ):
-            source = batch["src"]
-            target = batch["tgt"]
-            mode = batch["mode"]
-            # no need to shift output by 1 when running a masking task
-            if mode == Modes.Masking:
-                target_input = target_expected = target
-            else:
-                target_input = target[:, :-1]
-                target_expected = target[:, 1:]
+            source, target = batch
+
+            target_input = target[:, :-1]
+            target_expected = target[:, 1:]
 
             masks = {
-                "tgt_mask": make_look_ahead_mask(target_input.size(-1), device),
+                "tgt_mask": make_look_ahead_mask(target_input.size(1), device),
                 "src_key_padding_mask": source == vocab.PAD_IDX,
                 "tgt_key_padding_mask": target_input == vocab.PAD_IDX,
             }
