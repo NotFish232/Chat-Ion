@@ -1,8 +1,9 @@
+import math
+import timeit
+
 import torch as T
 from torch import nn
 from typing_extensions import Self
-import math
-import timeit
 
 
 class SinusoidalPositionalEncoding(nn.Module):
@@ -107,13 +108,12 @@ if __name__ == "__main__":
     print(f"pe1: {sum(i.numel() for i in pe1.parameters()):,} params")
     print(f"pe2: {sum(i.numel() for i in pe2.parameters()):,} params")
     print(f"pe3: {sum(i.numel() for i in pe3.parameters()):,} params")
-    
+
     with T.no_grad():
         t1 = timeit.timeit(lambda: pe1(x), number=1_000)
         t2 = timeit.timeit(lambda: pe2(x), number=1_000)
         t3 = timeit.timeit(lambda: pe3(x), number=1_000)
-    
+
     print(f"pe1: {t1:.2f} sec")
     print(f"pe2: {t2:.2f} sec")
     print(f"pe3: {t3:.3f} sec")
-    

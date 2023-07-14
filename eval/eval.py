@@ -55,7 +55,6 @@ def run_evaluation(model_name: str, device: str) -> None:
                 response = T.argmax(y[0, t])
                 tgt[0, t] = response
 
-
             output = ""
             for i, part in enumerate(sentence_parts):
                 output += part

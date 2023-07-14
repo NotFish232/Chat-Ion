@@ -1,7 +1,8 @@
 import string
-from .datasets.vocabulary import Vocabulary, SPECIAL_TOKENS
 
 import torch as T
+
+from .datasets.vocabulary import SPECIAL_TOKENS, Vocabulary
 
 
 def make_look_ahead_mask(n: int, device: T.device) -> T.Tensor:
@@ -22,6 +23,7 @@ RIGHT_SPACE_PUNCTUATION = [".", ",", "?", "!", ";", ":", ")", "}", "]", "%"]
 TWO_SPACE_PUNCTUATION = ["@", "#", "^", "&", "*", "~", "+", "=", "<", ">"]
 
 
+#TODO: rewrite this 
 def join_tokens(tokens: list[int | str], subword_start: str = "##") -> str:
     if isinstance(tokens, T.Tensor):
         tokens = tokens.tolist()

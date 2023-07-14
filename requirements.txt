@@ -1,5 +1,6 @@
 torch
 torchview
+tensorboard
 torchvision
 tqdm
 argparse

@@ -2,13 +2,13 @@ import io
 import json
 import multiprocessing as mp
 import random
-from typing import Callable, Iterator
+from typing import Any, Callable, Iterator
+
 import numpy as np
 import zstandard as zstd
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from typing_extensions import Self
-from typing import Any
 
 from .shared import DATA_DIR, Modes
 from .vocabulary import Vocabulary

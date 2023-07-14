@@ -1,7 +1,7 @@
-from typing_extensions import Self
+from typing import Any, Iterator
+
 from torch.utils.data import DataLoader
-from typing import Iterator, Any
-from .datasets.shared import Modes
+from typing_extensions import Self
 
 
 class InterleavedDataLoader(DataLoader):

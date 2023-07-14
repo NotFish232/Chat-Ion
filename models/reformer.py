@@ -37,5 +37,3 @@ class Reformer(nn.Module):
 
     def forward(self: Self, x: T.Tensor) -> T.Tensor:
         ...
-
-

@@ -4,6 +4,7 @@ import torch as T
 from torch import nn
 from torch.nn import functional as F
 from typing_extensions import Self
+
 from .components.positional_encoding import SinusoidalPositionalEncoding
 
 
@@ -48,7 +49,7 @@ class Transformer(nn.Module):
 
         # TODO: FIXME
         if "src_key_padding_mask" in kwargs.keys():
-            del kwargs["src_key_padding_mask"] 
+            del kwargs["src_key_padding_mask"]
         if "tgt_key_padding_mask" in kwargs.keys():
             del kwargs["tgt_key_padding_mask"]
 

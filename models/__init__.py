@@ -1,2 +1,2 @@
-from .transformer import Transformer
 from .reformer import Reformer
+from .transformer import Transformer

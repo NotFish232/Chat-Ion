@@ -1,9 +1,11 @@
+import math
+import random
+
+import torch as T
 from torch import nn
 from torch.nn import functional as F
 from typing_extensions import Self
-import torch as T
-import random
-import math
+
 
 # FIXME: WIP
 class MultiheadLSHAttention(nn.Module):

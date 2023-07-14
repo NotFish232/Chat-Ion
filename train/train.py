@@ -16,8 +16,8 @@ from tqdm import tqdm
 from models import Transformer
 from train.arg_parser import get_args
 from utils import *
-from utils.datasets.shared import Modes
 from utils.datasets import CornellMovieDataset, OpenWebTextDataset
+from utils.datasets.shared import Modes
 
 
 def setup_distributed(rank: int = -1, world_size: int = -1) -> None:
