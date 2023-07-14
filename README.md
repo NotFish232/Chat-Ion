@@ -23,8 +23,9 @@ Leverages six types of training
 
 # (WIP)
 ### Evaluation & Visualization
-    run `python3 eval.py` to test the model on user input \
-    run `python3 visualize.py` to run a TensorBoard session for more information
-    * 3D Embeddings
-    * Model Architecture
-    * Example Data
+
+run `python3 eval.py` to test the model on user input \
+run `python3 visualize.py` to run a TensorBoard session for more information
+* 3D Embeddings
+* Model Architecture
+* Example Data
