@@ -1,4 +1,5 @@
 torch
+torch-tb-profiler
 torchview
 tensorboard
 torchvision
