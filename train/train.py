@@ -138,14 +138,14 @@ def prepare_logger(rank: int, world_size: int) -> logging.Logger:
     return logger
 
 
-def calc_accuracy(y_hat: T.Tensor, y: T.Tensor, ignore_idx: int) -> int:
+def calc_totals(y_hat: T.Tensor, y: T.Tensor, ignore_idx: int) -> tuple:
     mask = y != ignore_idx
     y_hat = y_hat[mask]
     y = y[mask]
     num_correct = T.sum(y_hat == y).item()
     num_total = y.numel()
 
-    return num_correct / num_total
+    return num_correct, num_total
 
 
 def training_loop(
@@ -205,6 +205,7 @@ def training_loop(
         starting_epochs = 0
 
     iteration = 0
+    num_correct = num_total = 0
     for epoch in range(starting_epochs + 1, starting_epochs + epochs + 1):
         for batch in tqdm(
             dataloader,
@@ -235,6 +236,12 @@ def training_loop(
 
             iteration += 1
 
+            if is_main:
+                target_pred = T.argmax(y, dim=-1)
+                nc, nt = calc_totals(target_pred, target_expected, vocab.PAD_IDX)
+                num_correct += nc
+                num_total += nt
+
             if iteration % grad_acc_steps == 0:
                 scaler.step(optimizer)
                 scaler.update()
@@ -242,8 +249,8 @@ def training_loop(
                 scheduler.step()
 
             if iteration % checkpoint_interval == 0 and is_main:
-                target_pred = T.argmax(y, dim=-1)
-                accuracy = calc_accuracy(target_pred, target_expected, vocab.PAD_IDX)
+                accuracy = num_correct / num_total
+                num_correct = num_total = 0
                 logger.info("Saving checkpoint...")
                 logger.info(f"Accuracy: {accuracy:.2%}")
                 checkpoint = {
