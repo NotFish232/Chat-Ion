@@ -23,8 +23,8 @@ from utils.datasets.shared import Modes
 def setup_distributed(rank: int = -1, world_size: int = -1) -> None:
     dist.init_process_group(
         "nccl",
-        rank=rank,
         init_method="tcp://localhost:8080",
+        rank=rank,
         world_size=world_size,
     )
 
@@ -187,7 +187,7 @@ def training_loop(
     logger.info(f"Parameters: {sum(i.numel() for i in network.parameters()):,}")
 
     optimizer = prepare_optimizer(network, learning_rate, weight_decay)
-    scheduler = CosineAnnealingWarmRestarts(optimizer, 50)
+    scheduler = CosineAnnealingWarmRestarts(optimizer, 100)
     scaler = amp.GradScaler(enabled=device.type == "cuda")
     criterion = nn.CrossEntropyLoss(ignore_index=vocab.PAD_IDX)
     model_mgr = ModelManager(model_name)
