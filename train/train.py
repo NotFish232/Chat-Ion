@@ -262,13 +262,6 @@ def training_loop(
                 }
                 model_mgr.save_checkpoint(checkpoint)
 
-    # step optimizer with final gradients
-    if iteration % grad_acc_steps != 0:
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad(set_to_none=True)
-        scheduler.step()
-
     if is_main:
         logger.info("Making final checkpoint and saving model...")
         checkpoint = {
