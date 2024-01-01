@@ -216,18 +216,6 @@ class OpenWebTextDataset(Dataset):
             dtype=np.uint16,
             shape=(num_passages, self.max_processed_length),
         )
-        """
-        num_processes = 8
-        with mp.Pool(num_processes) as p:
-            m = p.imap(self._process_file, self.unprocessed_files)
-            progress_bar = tqdm(
-                m, total=len(self.unprocessed_files), desc="Processing data.."
-            )
-            idx = 0
-            for passages in progress_bar:
-                array[idx : idx + len(passages)] = passages
-                idx += len(passages)
-        """
         idx = 0
         for file in tqdm(self.unprocessed_files, desc=f"Writing passages"):
             new_passages = self._process_file(file)

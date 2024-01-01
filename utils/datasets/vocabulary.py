@@ -1,7 +1,5 @@
 import json
 import string
-
-import nltk
 from nltk import corpus
 from transformers import BertTokenizer
 from typing_extensions import Self
@@ -17,9 +15,7 @@ class Vocabulary:
         folder_name: str = "vocabulary",
         vocab_file_name: str = "tokens.json",
     ) -> None:
-        self.tokenizer = BertTokenizer.from_pretrained(
-            "bert-base-cased", local_files_only=True
-        )
+        self.tokenizer = BertTokenizer.from_pretrained("bert-base-cased")
 
         vocab_file_path = DATA_DIR / folder_name / vocab_file_name
         if not vocab_file_path.exists():

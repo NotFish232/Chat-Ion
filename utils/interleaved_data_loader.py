@@ -3,7 +3,9 @@ from typing import Any, Iterator
 from torch.utils.data import DataLoader
 from typing_extensions import Self
 
-
+"""
+Interleaves several dataloaders
+"""
 class InterleavedDataLoader(DataLoader):
     def __init__(self: Self, *dataloaders: tuple[DataLoader]) -> None:
         self.dataloaders = dataloaders

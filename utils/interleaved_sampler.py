@@ -4,6 +4,9 @@ from torch.utils.data.distributed import Sampler
 from typing_extensions import Self
 
 
+"""
+Sampler class that splits a dataset into world_size num interleaved datasets
+"""
 class InterleavedSampler(Sampler):
     def __init__(self: Self, dataset_len: int, rank: int, world_size: int) -> None:
         self.indices = range(rank, dataset_len, world_size)
