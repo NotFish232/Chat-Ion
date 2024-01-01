@@ -47,12 +47,6 @@ class Transformer(nn.Module):
         src += self.positional_encoding(src)
         tgt += self.positional_encoding(tgt)
 
-        # TODO: FIXME
-        if "src_key_padding_mask" in kwargs.keys():
-            del kwargs["src_key_padding_mask"]
-        if "tgt_key_padding_mask" in kwargs.keys():
-            del kwargs["tgt_key_padding_mask"]
-
         x = self.transformer(src, tgt, **kwargs)
 
         x = self.linear(x)
@@ -61,17 +55,3 @@ class Transformer(nn.Module):
             x = F.softmax(x, dim=-1)
 
         return x
-
-
-def main() -> None:
-    n = Transformer(10, 8)
-    n.eval()
-    print(f"{sum(i.numel() for i in n.parameters()):,}")
-    x = T.randint(0, 5, (1, 10))
-    y = T.randint(0, 5, (1, 10))
-    with T.no_grad():
-        print(x, y, T.argmax(n(x, y), dim=1), sep="\n")
-
-
-if __name__ == "__main__":
-    main()
